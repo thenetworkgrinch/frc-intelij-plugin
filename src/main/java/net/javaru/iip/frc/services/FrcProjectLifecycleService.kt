@@ -55,6 +55,7 @@ import net.javaru.iip.frc.wpilib.syncFrcFacetWithWpiLibDetection
 import com.intellij.openapi.vfs.VirtualFileManager
 import com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener
 import net.javaru.iip.frc.util.getMainModule
+import net.javaru.iip.frc.util.isJavaPluginAvailable
 import com.intellij.openapi.vfs.newvfs.BulkFileListener
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import javax.annotation.CheckForNull
@@ -115,13 +116,23 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
         VendordepsToolWindowFactory.updateAvailability(project)
         if (project.isWpiLibProject())
         {
-            ensureRunDebugConfigurationsCreated(project)
-            ensureWpiLibSimulationRunConfigurations(project)
-            ensureGradleJvmIsWpiLibJdk(project)
+            ensureWpiLibProjectSetUp()
         }
     }
 
 
+
+    /** Creates the run configurations, and sets the Gradle JVM, of a WPILib project. */
+    private fun ensureWpiLibProjectSetUp()
+    {
+        // The run configurations (Java simulation, remote debugging, etc.) require the Java plugin, which is not available in CLion
+        if (isJavaPluginAvailable)
+        {
+            ensureRunDebugConfigurationsCreated(project)
+            ensureWpiLibSimulationRunConfigurations(project)
+        }
+        ensureGradleJvmIsWpiLibJdk(project)
+    }
 
     internal fun runFrcProjectStartupActivities(project: Project)
     {
@@ -132,9 +143,7 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
         if (project.isOpen && !project.isDisposed && project.isWpiLibProject())
         {
             RioLogProjectService.getInstance(project).update()
-            ensureRunDebugConfigurationsCreated(project)
-            ensureWpiLibSimulationRunConfigurations(project)
-            ensureGradleJvmIsWpiLibJdk(project)
+            ensureWpiLibProjectSetUp()
         }
 
         if (project.isOpen && project.isFrcFacetedProject() && !project.isDisposed)
@@ -170,9 +179,7 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
             {
                 if (project.isWpiLibProject())
                 {
-                    ensureRunDebugConfigurationsCreated(project)
-                    ensureWpiLibSimulationRunConfigurations(project)
-                    ensureGradleJvmIsWpiLibJdk(project)
+                    ensureWpiLibProjectSetUp()
                 }
             }
         }

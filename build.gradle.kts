@@ -94,12 +94,43 @@ intellijPlatform {
     pluginVerification {
         // https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html#intellijPlatform-pluginVerification
         // TODO - configure pluginVerification
+        ides {
+            // Locally installed IDEs to verify against, such as CLion. ex: -PverifierLocalIdePaths=C:/Users/me/AppData/Local/Programs/CLion
+            projectPropertyList("verifierLocalIdePaths").filter { it.isNotBlank() }.forEach { local(file(it.replace("~", System.getProperty("user.home")))) }
+        }
     }
     
     // TODO:
     //    Downloading sources is managed by the Plugin DevKit plugin in version 2024.1+. Not finding that setting https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-migration.html#intellijdownloadsources
 }
 
+
+// Runs CLion (for C++ robot projects) with the plugin. CLion does not bundle the Gradle plugin, so it is installed from the Marketplace.
+//    Uses a locally installed CLion if 'clionLocalPath' is set (ex: -PclionLocalPath=C:/Users/me/AppData/Local/Programs/CLion), otherwise downloads CLion 'ideaVersionPlain'
+intellijPlatformTesting {
+    runIde {
+        register("runClion") {
+            val clionLocalPath = projectProperty("clionLocalPath", "")
+            if (clionLocalPath.isNotBlank()) {
+                localPath.set(file(clionLocalPath.replace("~", System.getProperty("user.home"))))
+            } else {
+                type.set(org.jetbrains.intellij.platform.gradle.IntelliJPlatformType.CLion)
+                version.set(ideaVersionPlain)
+            }
+            plugins {
+                plugin("com.intellij.gradle", projectProperty("clionGradlePluginVersion", "262.10968.211"))
+            }
+            // Opens a (trusted) project on startup. ex: -PrunClionProject=C:/robots/MyCppRobot
+            val runClionProject = projectProperty("runClionProject", "")
+            if (runClionProject.isNotBlank()) {
+                task {
+                    args(runClionProject)
+                    jvmArgs("-Didea.trust.all.projects=true")
+                }
+            }
+        }
+    }
+}
 
 // Section to configure tasks specific to intellij plugin tasks
 tasks {

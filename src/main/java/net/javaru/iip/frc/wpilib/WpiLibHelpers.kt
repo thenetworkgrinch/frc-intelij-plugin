@@ -29,6 +29,7 @@ import net.javaru.iip.frc.i18n.FrcMessageKey
 import net.javaru.iip.frc.notify.FrcNotifyType
 import net.javaru.iip.frc.util.computeInSmartReadAction
 import net.javaru.iip.frc.util.findClass
+import net.javaru.iip.frc.util.isJavaPluginAvailable
 import net.javaru.iip.frc.util.warnWhenNotInTestMode
 import net.javaru.iip.frc.wpilib.version.WpiLibVersion
 import net.javaru.iip.frc.wpilib.version.WpiLibVersionImpl
@@ -339,6 +340,8 @@ fun Project.getAttachedWpiLibVersionStringInSmartReadAction(): String?
  */
 fun Project.getAttachedWpiLibVersionString(): String?
 {
+    // The version is read from the attached WPILib Java library, so it cannot be determined without the Java plugin (e.g. in CLion)
+    if (!isJavaPluginAvailable) return null
     val verClasses = findClass(this, WpiLibConstants.VERSION_CLASS_FQN)
     for (psiClass in verClasses)
     {

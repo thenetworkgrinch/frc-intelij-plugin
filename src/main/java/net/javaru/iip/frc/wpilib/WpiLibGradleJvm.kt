@@ -25,9 +25,12 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.projectRoots.Sdk
+import com.intellij.openapi.projectRoots.SdkTypeId
+import com.intellij.openapi.projectRoots.SimpleJavaSdkType
 import com.intellij.openapi.projectRoots.impl.SdkConfigurationUtil
 import com.intellij.openapi.util.io.FileUtil
 import net.javaru.iip.frc.run.findWpiLibJdkHome
+import net.javaru.iip.frc.util.isJavaPluginAvailable
 import org.jetbrains.plugins.gradle.settings.GradleSettings
 import java.nio.file.Path
 
@@ -76,10 +79,12 @@ private fun findOrAddJdk(jdkHome: Path, jdkHomePath: String): Sdk
 {
     val jdkTable = ProjectJdkTable.getInstance()
     val baseName = "WPILib ${jdkHome.parent.fileName} JDK"
-    jdkTable.allJdks.firstOrNull { it.sdkType is JavaSdk && it.name.startsWith(baseName) && it.homePath != null && FileUtil.pathsEqual(it.homePath, jdkHomePath) }
+    // Without the Java plugin (e.g. in CLion), the Gradle plugin uses JDKs of the platform's SimpleJavaSdkType
+    val sdkType: SdkTypeId = if (isJavaPluginAvailable) JavaSdk.getInstance() else SimpleJavaSdkType.getInstance()
+    jdkTable.allJdks.firstOrNull { it.sdkType == sdkType && it.name.startsWith(baseName) && it.homePath != null && FileUtil.pathsEqual(it.homePath, jdkHomePath) }
         ?.let { return it }
     val name = SdkConfigurationUtil.createUniqueSdkName(baseName, jdkTable.allJdks.toList())
-    val jdk = JavaSdk.getInstance().createJdk(name, jdkHomePath, false)
+    val jdk = if (isJavaPluginAvailable) JavaSdk.getInstance().createJdk(name, jdkHomePath, false) else SimpleJavaSdkType.getInstance().createJdk(name, jdkHomePath)
     WriteAction.run<Throwable> { jdkTable.addJdk(jdk) }
     logger.info("[FRC] Added the WPILib JDK '$name' ($jdkHomePath)")
     return jdk
