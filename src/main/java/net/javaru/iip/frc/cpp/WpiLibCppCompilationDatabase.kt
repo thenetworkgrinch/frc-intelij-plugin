@@ -187,16 +187,75 @@ fun mergeCompileCommands(projectRoots: List<Path>, selectedTarget: String?): Mer
         primaryTargets[projectRoot] = primaryTarget
         val buildType = if (primaryTarget.endsWith("release")) "release" else "debug"
         val orderedTargets = listOf(primaryTarget) + targets.filter { it != primaryTarget && it.endsWith(buildType) }
+        var primaryEntry: JsonObject? = null
         orderedTargets.forEach { target ->
             val text = projectRoot.resolve(targetedCompileCommandsDirPath).resolve(target).resolve(compileCommandsFileName).readText()
             JsonParser.parseString(text).asJsonArray.forEach { entry ->
+                if (primaryEntry == null) primaryEntry = entry.asJsonObject
                 val file = compiledFileKey(entry.asJsonObject) ?: return@forEach
                 if (files.add(file)) merged.add(entry)
             }
         }
+        primaryEntry?.let { entry ->
+            libraryHeaderCompileCommands(entry).forEach { headerEntry -> if (files.add(compiledFileKey(headerEntry)!!)) merged.add(headerEntry) }
+        }
     }
     if (primaryTargets.isEmpty()) return null
-    return MergedCompileCommands(GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(merged), primaryTargets)
+    // Not pretty printed, as the library headers' compile commands make the file large
+    return MergedCompileCommands(GsonBuilder().disableHtmlEscaping().create().toJson(merged), primaryTargets)
+}
+
+/** The extensions of the header files whose compile commands are added. (Eigen's headers, e.g. `Eigen/Core`, have no extension.) */
+private val headerFileExtensions = setOf("h", "hh", "hpp", "hxx")
+
+/**
+ * Compile commands for the headers of the WPILib and vendordep libraries, which GradleRIO extracts (from their Maven artifacts) into
+ * `<artifact>-<version>-headers` directories in the Gradle cache, from one of the project's compile commands. Without them, a library
+ * header opened in CLion has no compile command, so it is analyzed without the include paths, and the headers it includes from the
+ * other libraries (e.g. a vendordep's includes of WPILib headers) are not found.
+ */
+private fun libraryHeaderCompileCommands(sourceEntry: JsonObject): List<JsonObject>
+{
+    val arguments = sourceEntry.get("arguments")?.takeIf { it.isJsonArray }?.asJsonArray?.map { it.asString } ?: return emptyList()
+    val sourceFile = sourceEntry.get("file")?.asString ?: return emptyList()
+    val includeDirs = arguments.mapIndexedNotNull { i, argument ->
+        when
+        {
+            argument == "-I" || argument == "-isystem" || argument == "/I" -> arguments.getOrNull(i + 1)
+            argument.startsWith("-I") || argument.startsWith("/I")         -> argument.substring(2)
+            else                                                           -> null
+        }
+    }.distinct().map { Path.of(it) }.filter { it.name.endsWith("-headers") && it.isDirectory() }
+    // The source file's arguments, without its output file, for the header
+    val headerArguments = arguments.filterIndexed { i, argument -> argument != sourceFile && argument != "-o" && arguments.getOrNull(i - 1) != "-o" }
+    val directory = sourceEntry.get("directory")
+    return includeDirs.flatMap { includeDir ->
+        val headers = try
+        {
+            Files.walk(includeDir).use { paths ->
+                paths.filter { it.isRegularFile() && isHeaderFileName(it.name) }.map { it.toString() }.sorted().toList()
+            }
+        }
+        catch (e: IOException)
+        {
+            logger.info("[FRC] Could not list the headers in $includeDir. Cause: $e")
+            emptyList()
+        }
+        headers.map { header ->
+            JsonObject().apply {
+                directory?.let { add("directory", it) }
+                addProperty("file", header)
+                add("arguments", JsonArray().apply { headerArguments.forEach { add(it) }; add(header) })
+            }
+        }
+    }
+}
+
+private fun isHeaderFileName(name: String): Boolean
+{
+    val extension = name.substringAfterLast('.', "")
+    // Extensionless files that are not headers are named in all capitals, e.g. LICENSE
+    return extension.lowercase() in headerFileExtensions || (extension.isEmpty() && name != name.uppercase())
 }
 
 /** The (case-insensitive) path of the file a compilation database entry compiles, resolved against the entry's directory. */

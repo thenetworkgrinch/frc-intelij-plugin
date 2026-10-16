@@ -16,6 +16,8 @@
 
 package net.javaru.iip.frc.cpp
 
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -108,6 +110,34 @@ internal class WpiLibCppCompilationDatabaseTest
         assertEquals(listOf("src/main/cpp/Robot.cpp" to "g++", shared to "g++", "src/Library.cpp" to "lib-g++"), merged.files())
         assertEquals(listOf("linuxsystemcoredebug", "linuxsystemcoredebug"), merged.primaryTargets.values.toList())
         assertNull(mergeCompileCommands(listOf(dir.resolve("none")), null))
+    }
+
+    @Test
+    fun `the library headers get the project's compile command, without its output`(@TempDir dir: Path)
+    {
+        val projectRoot = dir.resolve("robot")
+        val libraryHeaders = dir.resolve("caches/transformed/wpimath-cpp-2027.0.0-headers").createDirectories()
+        listOf("wpi/math/Pose2d.hpp", "Eigen/Core", "gcem.h", "LICENSE", "README.md", "Eigen/src/Core/util/Macros.inc")
+            .forEach { libraryHeaders.resolve(it).also { file -> file.parent.createDirectories() }.writeText("") }
+        val otherIncludeDir = dir.resolve("include").createDirectories().also { it.resolve("Other.h").writeText("") }
+        val source = projectRoot.resolve("src/main/cpp/Robot.cpp").toString()
+        val dbDir = projectRoot.resolve("build/TargetedCompileCommands/linuxsystemcoredebug").createDirectories()
+        val entry = JsonObject().apply {
+            addProperty("directory", projectRoot.toString())
+            addProperty("file", source)
+            add("arguments", JsonArray().apply {
+                listOf("g++", "-x", "c++", "-c", "-I", libraryHeaders.toString(), "-isystem", otherIncludeDir.toString(), "-o", "Robot.o", source).forEach { add(it) }
+            })
+        }
+        dbDir.resolve(compileCommandsFileName).writeText(JsonArray().apply { add(entry) }.toString())
+
+        val entries = JsonParser.parseString(mergeCompileCommands(listOf(projectRoot), null)!!.json).asJsonArray.map { it.asJsonObject }
+
+        val headers = listOf("Eigen/Core", "gcem.h", "wpi/math/Pose2d.hpp").map { libraryHeaders.resolve(it).toString() }
+        assertEquals(listOf(source) + headers, entries.map { it.get("file").asString })
+        assertEquals(listOf("g++", "-x", "c++", "-c", "-I", libraryHeaders.toString(), "-isystem", otherIncludeDir.toString(), headers[0]),
+                     entries[1].getAsJsonArray("arguments").map { it.asString })
+        assertEquals(projectRoot.toString(), entries[1].get("directory").asString)
     }
 
     @Test
