@@ -149,11 +149,14 @@ fun isRobotProjectDir(projectRoot: Path): Boolean =
 
 private val gradleRioYearRegex = Regex("""GradleRIO['"]?\)?\s+version\s+['"](\d{4})""")
 
-/** The project's year, from its GradleRIO version, or else from its `.wpilib/wpilib_preferences.json` file. */
-fun findProjectYear(projectRoot: Path): Int? =
+/** The year of the project's GradleRIO version, from its Gradle build file, or `null` if it is not found. */
+fun findGradleRioYear(projectRoot: Path): Int? =
     listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.filter { it.isRegularFile() }
         .firstNotNullOfOrNull { gradleRioYearRegex.find(it.readText())?.groupValues?.get(1)?.toInt() }
-    ?: extractProjectYear(readWpiLibPreferenceString(projectRoot, projectYearPropertyName))
+
+/** The project's year, from its GradleRIO version, or else from its `.wpilib/wpilib_preferences.json` file. */
+fun findProjectYear(projectRoot: Path): Int? =
+    findGradleRioYear(projectRoot) ?: extractProjectYear(readWpiLibPreferenceString(projectRoot, projectYearPropertyName))
 
 /** The targets (e.g. `linuxsystemcoredebug` and `windowsx86-64debug`) that GradleRIO generated a compilation database for. */
 fun findCompileCommandsTargets(projectRoot: Path): List<String>

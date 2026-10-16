@@ -74,6 +74,7 @@ import com.intellij.util.ui.UIUtil
 import net.javaru.iip.frc.wpilib.isWpiLibProject
 import net.javaru.iip.frc.util.runBackgroundTask
 import net.javaru.iip.frc.wpilib.findWpiLibProjectRootDirs
+import net.javaru.iip.frc.cpp.findGradleRioYear
 import net.javaru.iip.frc.wpilib.getConfiguredProjectYear
 import net.javaru.iip.frc.wpilib.wpiLibDirName
 import net.javaru.iip.frc.wpilib.wpiLibPreferencesFileName
@@ -160,6 +161,8 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
     private val commandsConflictLabel = JBLabel(
         "<html>Commands v2 and Commands v3 are both installed. Remove one of them; the build will fail until you do.</html>",
         AllIcons.General.Warning, JBLabel.LEFT)
+    /** Shown when the `projectYear` in `wpilib_preferences.json` is not the year of the project's GradleRIO version, so the libraries listed are for the wrong season. */
+    private val projectYearMismatchLabel = JBLabel("", AllIcons.General.Warning, JBLabel.LEFT)
     private val installButton = JButton("Install", AllIcons.Actions.Download)
     private val updateButton = JButton("Update", AllIcons.Actions.Refresh)
     private val removeButton = JButton("Remove", AllIcons.General.Remove)
@@ -229,9 +232,12 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
         commandsConflictLabel.border = JBUI.Borders.empty(2, 6, 4, 6)
         commandsConflictLabel.foreground = JBColor.RED
         commandsConflictLabel.isVisible = false
+        projectYearMismatchLabel.border = JBUI.Borders.empty(2, 6, 4, 6)
+        projectYearMismatchLabel.isVisible = false
         val headerPanel = JPanel(BorderLayout())
         headerPanel.add(headerLabel, BorderLayout.NORTH)
         headerPanel.add(commandsConflictLabel, BorderLayout.CENTER)
+        headerPanel.add(projectYearMismatchLabel, BorderLayout.SOUTH)
         val contentPanel = JPanel(BorderLayout())
         contentPanel.add(headerPanel, BorderLayout.NORTH)
         contentPanel.add(ScrollPaneFactory.createScrollPane(list, true), BorderLayout.CENTER)
@@ -319,6 +325,13 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
                 val projectYear = project.getConfiguredProjectYear()
                 loadedProjectYear = projectYear
                 projectYearNumber = extractProjectYear(projectYear)
+                val gradleRioYear = project.findWpiLibProjectRootDirs().firstOrNull()?.let { findGradleRioYear(it.toNioPath()) }
+                val yearNumber = projectYearNumber
+                invokeLater {
+                    projectYearMismatchLabel.isVisible = gradleRioYear != null && yearNumber != null && gradleRioYear != yearNumber
+                    projectYearMismatchLabel.text = "<html>This project uses GradleRIO $gradleRioYear, but its projectYear in .wpilib/wpilib_preferences.json " +
+                                                    "is '$projectYear', so these are the $yearNumber libraries. Set projectYear to match.</html>"
+                }
                 if (projectYear == null)
                 {
                     invokeLater {
