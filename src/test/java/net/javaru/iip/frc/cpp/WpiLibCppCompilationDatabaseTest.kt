@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
+import kotlin.io.path.name
 import kotlin.io.path.writeText
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -138,6 +139,52 @@ internal class WpiLibCppCompilationDatabaseTest
         assertEquals(listOf("g++", "-x", "c++", "-c", "-I", libraryHeaders.toString(), "-isystem", otherIncludeDir.toString(), headers[0]),
                      entries[1].getAsJsonArray("arguments").map { it.asString })
         assertEquals(projectRoot.toString(), entries[1].get("directory").asString)
+    }
+
+    @Test
+    fun `a header directory is from the vendordep that has its artifact, otherwise from WPILib`(@TempDir projectRoot: Path)
+    {
+        val vendordeps = projectRoot.resolve("vendordeps").createDirectories()
+        vendordeps.resolve("Phoenix6.json").writeText("""{"name": "CTRE-Phoenix (v6)", "cppDependencies": [
+            |{"artifactId": "wpiapi-cpp", "version": "26.70.0"}, {"artifactId": "tools", "version": "26.70.0"}, {"artifactId": "tools-sim", "version": "26.70.0"}]}""".trimMargin())
+        vendordeps.resolve("CommandsV2.json").writeText("""{"name": "Commands V2", "cppDependencies": [{"artifactId": "commandsv2-cpp", "version": "wpilib"}]}""")
+        vendordeps.resolve("CommandsV3.json").writeText("""{"name": "Commands v3", "cppDependencies": []}""")
+        vendordeps.resolve("broken.json").writeText("not json")
+
+        val artifactIds = findVendordepCppArtifactIds(projectRoot)
+
+        assertEquals(mapOf("Commands V2" to setOf("commandsv2-cpp"), "CTRE-Phoenix (v6)" to setOf("wpiapi-cpp", "tools", "tools-sim")), artifactIds)
+        assertEquals("CTRE-Phoenix (v6)", findHeaderDirLibrary("wpiapi-cpp-26.70.0-alpha-2-headers", artifactIds))
+        assertEquals("CTRE-Phoenix (v6)", findHeaderDirLibrary("tools-sim-26.70.0-alpha-2-headers", artifactIds))
+        assertEquals("Commands V2", findHeaderDirLibrary("commandsv2-cpp-2027.0.0-alpha-7-headers", artifactIds))
+        assertEquals(wpiLibHeadersLibraryName, findHeaderDirLibrary("wpimath-cpp-2027.0.0-alpha-7-headers", artifactIds))
+        assertEquals(wpiLibHeadersLibraryName, findHeaderDirLibrary("tools-extra-1.0-headers", artifactIds))
+    }
+
+    @Test
+    fun `the headers of disabled libraries get no compile commands`(@TempDir dir: Path)
+    {
+        val projectRoot = dir.resolve("robot")
+        projectRoot.resolve("vendordeps").createDirectories().resolve("REVLib.json")
+            .writeText("""{"name": "REVLib", "cppDependencies": [{"artifactId": "REVLib-cpp", "version": "2027.0.0"}]}""")
+        val wpiMath = dir.resolve("wpimath-cpp-2027.0.0-headers").createDirectories().also { it.resolve("Pose2d.hpp").writeText("") }
+        val revLib = dir.resolve("REVLib-cpp-2027.0.0-headers").createDirectories().also { it.resolve("SparkMax.h").writeText("") }
+        val source = projectRoot.resolve("src/main/cpp/Robot.cpp").toString()
+        val entry = JsonObject().apply {
+            addProperty("directory", projectRoot.toString())
+            addProperty("file", source)
+            add("arguments", JsonArray().apply { listOf("g++", "-I", wpiMath.toString(), "-I$revLib", source).forEach { add(it) } })
+        }
+        projectRoot.resolve("build/TargetedCompileCommands/linuxsystemcoredebug").createDirectories().resolve(compileCommandsFileName)
+            .writeText(JsonArray().apply { add(entry) }.toString())
+        fun headerFiles(disabled: Set<String>) = mergeCompileCommands(listOf(projectRoot), null, disabled)!!.let { merged ->
+            merged.libraryHeaderCount to JsonParser.parseString(merged.json).asJsonArray.drop(1).map { Path.of(it.asJsonObject.get("file").asString).name }
+        }
+
+        assertEquals(2 to listOf("Pose2d.hpp", "SparkMax.h"), headerFiles(emptySet()))
+        assertEquals(1 to listOf("Pose2d.hpp"), headerFiles(setOf("REVLib")))
+        assertEquals(1 to listOf("SparkMax.h"), headerFiles(setOf(wpiLibHeadersLibraryName)))
+        assertEquals(0 to emptyList(), headerFiles(setOf(wpiLibHeadersLibraryName, "REVLib")))
     }
 
     @Test

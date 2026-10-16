@@ -30,5 +30,9 @@
                 class="net.javaru.iip.frc.cpp.SelectCppCodeInsightTargetAction">
             <add-to-group group-id="FRC.FrcToolsActionsGroup" anchor="after" relative-to-action="frc.cpp.RegenerateCppCompileCommandsAction" />
         </action>
+        <action id="frc.cpp.ChooseCppLibraryHeadersAction"
+                class="net.javaru.iip.frc.cpp.ChooseCppLibraryHeadersAction">
+            <add-to-group group-id="FRC.FrcToolsActionsGroup" anchor="after" relative-to-action="frc.cpp.SelectCppCodeInsightTargetAction" />
+        </action>
     </actions>
 </idea-plugin>

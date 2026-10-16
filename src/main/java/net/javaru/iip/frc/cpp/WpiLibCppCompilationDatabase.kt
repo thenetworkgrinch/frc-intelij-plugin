@@ -108,6 +108,12 @@ fun hasRobotTarget(targets: List<String>): Boolean = targets.any { target -> rob
 /** The target (e.g. `linuxsystemcoredebug`) the user selected for the C++ code insight. */
 private const val selectedTargetKey = "FRC.cppCompileCommandsTarget"
 
+/** The libraries whose headers the user chose not to give compile commands. */
+private const val disabledHeaderLibrariesKey = "FRC.cppDisabledHeaderLibraries"
+
+/** Whether the user was told about the library headers' compile commands, and how to choose them. */
+private const val libraryHeadersNoticeShownKey = "FRC.cppLibraryHeadersNoticeShown"
+
 /** The files that, when changed, change the compilation database (relative to the project root). */
 private val compileCommandsInputFiles = listOf("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", ".wpilib/wpilib_preferences.json")
 private const val vendordepsDirName = "vendordeps"
@@ -167,17 +173,53 @@ fun choosePrimaryTarget(targets: List<String>, selectedTarget: String?): String?
     ?: targets.firstOrNull { it.endsWith("debug") }
     ?: targets.firstOrNull()
 
-/** A compilation database merged from the projects' generated ones, and the (primary) target used for each project. */
-class MergedCompileCommands(val json: String, val primaryTargets: Map<Path, String>)
+/** A compilation database merged from the projects' generated ones, the (primary) target used for each project, and the number of library headers it has. */
+class MergedCompileCommands(val json: String, val primaryTargets: Map<Path, String>, val libraryHeaderCount: Int)
+
+/** The name, in the library header settings, of the libraries that are not from a vendordep, i.e. WPILib's. */
+const val wpiLibHeadersLibraryName = "WPILib"
+
+/** The C++ artifact IDs of the project's vendordeps (whose headers are extracted to `<artifactId>-<version>-headers` directories), by vendordep name. */
+fun findVendordepCppArtifactIds(projectRoot: Path): Map<String, Set<String>>
+{
+    val vendordepsDir = projectRoot.resolve(vendordepsDirName)
+    if (!vendordepsDir.isDirectory()) return emptyMap()
+    return vendordepsDir.listDirectoryEntries("*.json").sortedBy { it.name }.mapNotNull { file ->
+        try
+        {
+            val vendordep = JsonParser.parseString(file.readText()).asJsonObject
+            val name = vendordep.get("name")?.asString ?: file.name.removeSuffix(".json")
+            val artifactIds = vendordep.get("cppDependencies")?.takeIf { it.isJsonArray }?.asJsonArray
+                ?.mapNotNull { it.asJsonObject.get("artifactId")?.asString }?.toSet() ?: emptySet()
+            (name to artifactIds).takeIf { artifactIds.isNotEmpty() }
+        }
+        catch (e: Exception)
+        {
+            logger.info("[FRC] Could not read the vendordep $file. Cause: $e")
+            null
+        }
+    }.groupBy({ it.first }, { it.second }).mapValues { (_, artifactIds) -> artifactIds.flatten().toSet() }
+}
+
+/**
+ * The library (vendordep name, or [wpiLibHeadersLibraryName]) of a `<artifactId>-<version>-headers` directory. The artifact ID must be
+ * followed by the version, so that e.g. `tools-sim-1.0-headers` is the `tools-sim` artifact's rather than the `tools` artifact's.
+ */
+fun findHeaderDirLibrary(headerDirName: String, vendordepCppArtifactIds: Map<String, Set<String>>): String =
+    vendordepCppArtifactIds.entries.firstOrNull { (_, artifactIds) ->
+        artifactIds.any { headerDirName.startsWith("$it-") && headerDirName.getOrNull(it.length + 1)?.isDigit() == true }
+    }?.key ?: wpiLibHeadersLibraryName
 
 /**
  * Creates the compilation database of the projects, from each project's primary target. Since tests are only built for the desktop,
  * the files that are not in the primary target's compilation database (i.e. the tests) are added from the project's other targets
  * of the same build type. A file that is compiled by several projects (e.g. a library's sources that an example robot project also
  * compiles) is used from the first project. Returns `null` if no compilation databases were generated.
+ * @param disabledHeaderLibraries the libraries (see [findHeaderDirLibrary]) whose headers are not given compile commands
  */
-fun mergeCompileCommands(projectRoots: List<Path>, selectedTarget: String?): MergedCompileCommands?
+fun mergeCompileCommands(projectRoots: List<Path>, selectedTarget: String?, disabledHeaderLibraries: Set<String> = emptySet()): MergedCompileCommands?
 {
+    var libraryHeaderCount = 0
     val files = mutableSetOf<String>()
     val merged = JsonArray()
     val primaryTargets = linkedMapOf<Path, String>()
@@ -197,12 +239,20 @@ fun mergeCompileCommands(projectRoots: List<Path>, selectedTarget: String?): Mer
             }
         }
         primaryEntry?.let { entry ->
-            libraryHeaderCompileCommands(entry).forEach { headerEntry -> if (files.add(compiledFileKey(headerEntry)!!)) merged.add(headerEntry) }
+            val vendordepCppArtifactIds = findVendordepCppArtifactIds(projectRoot)
+            val includeHeaderDir = { dirName: String -> findHeaderDirLibrary(dirName, vendordepCppArtifactIds) !in disabledHeaderLibraries }
+            libraryHeaderCompileCommands(entry, includeHeaderDir).forEach { headerEntry ->
+                if (files.add(compiledFileKey(headerEntry)!!))
+                {
+                    merged.add(headerEntry)
+                    libraryHeaderCount++
+                }
+            }
         }
     }
     if (primaryTargets.isEmpty()) return null
     // Not pretty printed, as the library headers' compile commands make the file large
-    return MergedCompileCommands(GsonBuilder().disableHtmlEscaping().create().toJson(merged), primaryTargets)
+    return MergedCompileCommands(GsonBuilder().disableHtmlEscaping().create().toJson(merged), primaryTargets, libraryHeaderCount)
 }
 
 /** The extensions of the header files whose compile commands are added. (Eigen's headers, e.g. `Eigen/Core`, have no extension.) */
@@ -214,7 +264,7 @@ private val headerFileExtensions = setOf("h", "hh", "hpp", "hxx")
  * header opened in CLion has no compile command, so it is analyzed without the include paths, and the headers it includes from the
  * other libraries (e.g. a vendordep's includes of WPILib headers) are not found.
  */
-private fun libraryHeaderCompileCommands(sourceEntry: JsonObject): List<JsonObject>
+private fun libraryHeaderCompileCommands(sourceEntry: JsonObject, includeHeaderDir: (dirName: String) -> Boolean): List<JsonObject>
 {
     val arguments = sourceEntry.get("arguments")?.takeIf { it.isJsonArray }?.asJsonArray?.map { it.asString } ?: return emptyList()
     val sourceFile = sourceEntry.get("file")?.asString ?: return emptyList()
@@ -225,7 +275,7 @@ private fun libraryHeaderCompileCommands(sourceEntry: JsonObject): List<JsonObje
             argument.startsWith("-I") || argument.startsWith("/I")         -> argument.substring(2)
             else                                                           -> null
         }
-    }.distinct().map { Path.of(it) }.filter { it.name.endsWith("-headers") && it.isDirectory() }
+    }.distinct().map { Path.of(it) }.filter { it.name.endsWith("-headers") && includeHeaderDir(it.name) && it.isDirectory() }
     // The source file's arguments, without its output file, for the header
     val headerArguments = arguments.filterIndexed { i, argument -> argument != sourceFile && argument != "-o" && arguments.getOrNull(i - 1) != "-o" }
     val directory = sourceEntry.get("directory")
@@ -448,13 +498,13 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
     }
 
     /** Writes the (primary targets') compilation database, if it changed, and loads it. */
-    private fun loadCompilationDatabase(projectRoots: List<Path>, userInitiated: Boolean = false)
+    private fun loadCompilationDatabase(projectRoots: List<Path>, userInitiated: Boolean = false): MergedCompileCommands?
     {
-        val merged = mergeCompileCommands(projectRoots, PropertiesComponent.getInstance(project).getValue(selectedTargetKey))
+        val merged = mergeCompileCommands(projectRoots, PropertiesComponent.getInstance(project).getValue(selectedTargetKey), getDisabledHeaderLibraries())
         if (merged == null)
         {
             notifyFailure("GradleRIO did not generate any compile commands (in $targetedCompileCommandsDirPath). Is a C++ toolchain installed?")
-            return
+            return null
         }
         val compileCommands = compileCommandsDir(projectRoots).resolve(compileCommandsFileName)
         if (!compileCommands.isRegularFile() || compileCommands.readText() != merged.json)
@@ -464,7 +514,7 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
         merged.primaryTargets.forEach { (projectRoot, target) ->
             logger.info("[FRC] Using the '$target' C++ compile commands of $projectRoot for project '${project.name}' (available: ${findCompileCommandsTargets(projectRoot)})")
         }
-        val compileCommandsFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(compileCommands) ?: return
+        val compileCommandsFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(compileCommands) ?: return merged
         ApplicationManager.getApplication().invokeLater({ CLionCompilationDatabase.linkOrReload(project, compileCommandsFile) }, ModalityState.nonModal(), project.disposed)
         if (userInitiated)
         {
@@ -474,6 +524,40 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
                 .withFrcPrefixedTitle("C++ compile commands updated")
                 .notify(project)
         }
+        if (merged.libraryHeaderCount > 0 && !PropertiesComponent.getInstance(project).getBoolean(libraryHeadersNoticeShownKey))
+        {
+            PropertiesComponent.getInstance(project).setValue(libraryHeadersNoticeShownKey, true)
+            FrcNotifyType.ACTIONABLE_INFO.builder()
+                .withContent("Compile commands were added for the ${merged.libraryHeaderCount} headers of the WPILib and vendordep libraries, so they have " +
+                             "code insight when opened. If CLion's indexing is slow, you can choose which libraries' headers are included " +
+                             "(Tools | FRC | Choose C++ Library Headers).")
+                .withFrcPrefixedTitle("C++ library headers")
+                .withAction("Choose Libraries...", true) { _, _ -> chooseCppLibraryHeaders(project) }
+                .noMoreActions()
+                .notify(project)
+        }
+        return merged
+    }
+
+    /** The libraries whose headers are not given compile commands. (The disabled, rather than enabled, libraries are stored, so new vendordeps are enabled.) */
+    fun getDisabledHeaderLibraries(): Set<String> = PropertiesComponent.getInstance(project).getList(disabledHeaderLibrariesKey)?.toSet() ?: emptySet()
+
+    /** The libraries whose headers can be given compile commands: WPILib, then the projects' vendordeps that have C++ libraries. Must not be called on the EDT. */
+    fun getHeaderLibraries(): List<String> =
+        listOf(wpiLibHeadersLibraryName) + findCppProjectRoots().flatMap { findVendordepCppArtifactIds(it).keys }.distinct().sortedBy { it.lowercase() }
+
+    /** Sets the libraries whose headers are not given compile commands, and reloads the compilation database. Must not be called on the EDT. */
+    fun setDisabledHeaderLibraries(disabledLibraries: Set<String>)
+    {
+        PropertiesComponent.getInstance(project).setList(disabledHeaderLibrariesKey, disabledLibraries.sorted().ifEmpty { null })
+        val projectRoots = findCppProjectRoots()
+        if (projectRoots.isEmpty()) return
+        val merged = loadCompilationDatabase(projectRoots) ?: return
+        FrcNotifyType.GENERAL_INFO.builder()
+            .withContent("The C++ compile commands now include ${merged.libraryHeaderCount} library headers" +
+                         (if (disabledLibraries.isEmpty()) "." else ", excluding those of ${disabledLibraries.sorted().joinToString(", ")}."))
+            .withFrcPrefixedTitle("C++ library headers updated")
+            .notify(project)
     }
 
     /** The targets that can be selected, and the one in use. Must not be called on the EDT. */

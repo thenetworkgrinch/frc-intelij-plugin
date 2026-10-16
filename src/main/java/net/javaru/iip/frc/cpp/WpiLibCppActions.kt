@@ -22,10 +22,15 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.project.DumbAware
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
+import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.dsl.builder.panel
 import net.javaru.iip.frc.notify.FrcNotifyType
+import javax.swing.JComponent
 
 /** Base for the actions that are only available in WPILib C++ projects. */
 abstract class AbstractWpiLibCppAction : AnAction(), DumbAware
@@ -46,6 +51,57 @@ class RegenerateCppCompileCommandsAction : AbstractWpiLibCppAction()
     {
         val project = e.project ?: return
         WpiLibCppCompilationDatabaseService.getInstance(project).update(userInitiated = true)
+    }
+}
+
+/** Chooses the libraries (WPILib and the vendordeps) whose headers are given compile commands, e.g. to speed up CLion's indexing. */
+class ChooseCppLibraryHeadersAction : AbstractWpiLibCppAction()
+{
+    override fun actionPerformed(e: AnActionEvent)
+    {
+        val project = e.project ?: return
+        chooseCppLibraryHeaders(project)
+    }
+}
+
+/** Shows the dialog to choose the libraries whose headers are given compile commands, and reloads the compilation database if they changed. */
+fun chooseCppLibraryHeaders(project: Project)
+{
+    val service = WpiLibCppCompilationDatabaseService.getInstance(project)
+    ApplicationManager.getApplication().executeOnPooledThread {
+        val libraries = service.getHeaderLibraries()
+        val disabledLibraries = service.getDisabledHeaderLibraries()
+        ApplicationManager.getApplication().invokeLater({
+            val dialog = CppLibraryHeadersDialog(project, libraries, disabledLibraries)
+            if (dialog.showAndGet() && dialog.disabledLibraries != disabledLibraries)
+            {
+                ApplicationManager.getApplication().executeOnPooledThread { service.setDisabledHeaderLibraries(dialog.disabledLibraries) }
+            }
+        }, ModalityState.nonModal(), project.disposed)
+    }
+}
+
+private class CppLibraryHeadersDialog(project: Project, libraries: List<String>, disabledLibraries: Set<String>) : DialogWrapper(project)
+{
+    private val checkBoxes = libraries.associateWith { JBCheckBox(it, it !in disabledLibraries) }
+    // Keeps the disabled libraries that are not currently listed (e.g. a vendordep that was removed, and may be added back)
+    private val unlistedDisabledLibraries = disabledLibraries - libraries.toSet()
+
+    val disabledLibraries: Set<String>
+        get() = unlistedDisabledLibraries + checkBoxes.filterValues { !it.isSelected }.keys
+
+    init
+    {
+        title = "C++ Library Headers"
+        init()
+    }
+
+    override fun createCenterPanel(): JComponent = panel {
+        row {
+            text("The headers of the checked libraries are given compile commands, so they have code insight when opened. " +
+                 "Uncheck libraries if CLion's indexing is slow. Vendordeps that are added later are included.", maxLineLength = 60)
+        }
+        checkBoxes.values.forEach { checkBox -> row { cell(checkBox) } }
     }
 }
 
