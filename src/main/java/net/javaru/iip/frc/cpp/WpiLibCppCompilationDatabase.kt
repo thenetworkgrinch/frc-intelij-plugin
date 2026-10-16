@@ -147,12 +147,15 @@ fun findNestedCppProjectRoots(dir: Path, depth: Int = nestedProjectSearchDepth):
 fun isRobotProjectDir(projectRoot: Path): Boolean =
     listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.any { it.isRegularFile() && it.readText().contains("frcUserProgram") }
 
-private val gradleRioYearRegex = Regex("""GradleRIO['"]?\)?\s+version\s+['"](\d{4})""")
+private val gradleRioVersionRegex = Regex("""GradleRIO['"]?\)?\s+version\s+['"]([^'"]+)['"]""")
+
+/** The project's GradleRIO version (e.g. `2027.0.0-alpha-7`), from its Gradle build file, or `null` if it is not found. */
+fun findGradleRioVersion(projectRoot: Path): String? =
+    listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.filter { it.isRegularFile() }
+        .firstNotNullOfOrNull { gradleRioVersionRegex.find(it.readText())?.groupValues?.get(1)?.trim() }
 
 /** The year of the project's GradleRIO version, from its Gradle build file, or `null` if it is not found. */
-fun findGradleRioYear(projectRoot: Path): Int? =
-    listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.filter { it.isRegularFile() }
-        .firstNotNullOfOrNull { gradleRioYearRegex.find(it.readText())?.groupValues?.get(1)?.toInt() }
+fun findGradleRioYear(projectRoot: Path): Int? = findGradleRioVersion(projectRoot)?.let { Regex("""^\d{4}""").find(it)?.value?.toInt() }
 
 /** The project's year, from its GradleRIO version, or else from its `.wpilib/wpilib_preferences.json` file. */
 fun findProjectYear(projectRoot: Path): Int? =

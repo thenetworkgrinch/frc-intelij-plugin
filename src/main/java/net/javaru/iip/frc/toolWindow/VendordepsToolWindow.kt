@@ -74,11 +74,12 @@ import com.intellij.util.ui.UIUtil
 import net.javaru.iip.frc.wpilib.isWpiLibProject
 import net.javaru.iip.frc.util.runBackgroundTask
 import net.javaru.iip.frc.wpilib.findWpiLibProjectRootDirs
-import net.javaru.iip.frc.cpp.findGradleRioYear
+import net.javaru.iip.frc.cpp.findGradleRioVersion
 import net.javaru.iip.frc.wpilib.getConfiguredProjectYear
 import net.javaru.iip.frc.wpilib.wpiLibDirName
 import net.javaru.iip.frc.wpilib.wpiLibPreferencesFileName
 import net.javaru.iip.frc.wpilib.vendordeps.VendorJsonRepoService
+import net.javaru.iip.frc.wpilib.vendordeps.vendorRepoBundleName
 import net.javaru.iip.frc.wpilib.vendordeps.VendorRepoLibrary
 import net.javaru.iip.frc.wpilib.vendordeps.VendordepsListingListener
 import net.javaru.iip.frc.wpilib.vendordeps.VendordepsProjectFile
@@ -324,15 +325,17 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
                 indicator.text = "Reading project year from wpilib_preferences.json"
                 val projectYear = project.getConfiguredProjectYear()
                 loadedProjectYear = projectYear
-                projectYearNumber = extractProjectYear(projectYear)
-                val gradleRioYear = project.findWpiLibProjectRootDirs().firstOrNull()?.let { findGradleRioYear(it.toNioPath()) }
-                val yearNumber = projectYearNumber
+                val gradleRioVersion = project.findWpiLibProjectRootDirs().firstOrNull()?.let { findGradleRioVersion(it.toNioPath()) }
+                val gradleRioYear = gradleRioVersion?.let { extractProjectYear(it) }
+                val yearNumber = extractProjectYear(projectYear)
+                // A projectYear that is not a year (e.g. "intellisense", as vendor library projects use) falls back to the GradleRIO version's
+                projectYearNumber = yearNumber ?: gradleRioYear
                 invokeLater {
                     projectYearMismatchLabel.isVisible = gradleRioYear != null && yearNumber != null && gradleRioYear != yearNumber
                     projectYearMismatchLabel.text = "<html>This project uses GradleRIO $gradleRioYear, but its projectYear in .wpilib/wpilib_preferences.json " +
                                                     "is '$projectYear', so these are the $yearNumber libraries. Set projectYear to match.</html>"
                 }
-                if (projectYear == null)
+                if (projectYear == null && gradleRioVersion == null)
                 {
                     invokeLater {
                         repoLibraries = null
@@ -342,7 +345,8 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
                     }
                     return@runBackgroundTask
                 }
-                VendorJsonRepoService.getInstance().getLibraries(projectYear, forceRefresh, indicator)
+                val gradleRioBundleNames = listOfNotNull(gradleRioVersion?.let { vendorRepoBundleName(it) }, gradleRioYear?.toString())
+                VendorJsonRepoService.getInstance().getLibraries(projectYear ?: "", forceRefresh, indicator, gradleRioBundleNames)
                     .onSuccess { bundle ->
                         invokeLater {
                             repoLibraries = bundle.libraries

@@ -67,6 +67,23 @@ data class VendordepsDownload(val url: String, val vendordeps: Vendordeps, val c
 /** The libraries available for a given bundle (i.e. year) of the vendor JSON repository. */
 data class VendorRepoBundle(val bundleName: String, val libraries: List<VendorRepoLibrary>)
 
+private val gradleRioBundleRegex = Regex("""^(\d{4})\.\d+\.\d+(?:-(alpha|beta)-?(\d+))?""", RegexOption.IGNORE_CASE)
+
+/**
+ * The vendor JSON repository bundle for a GradleRIO version, which is named as the WPILib installer's project year is: e.g.
+ * `2027_alpha7` for `2027.0.0-alpha-7`, `2026beta` for `2026.0.0-beta-3`, and `2026` for `2026.2.1`. Returns `null` if the version is not recognized.
+ */
+fun vendorRepoBundleName(gradleRioVersion: String): String?
+{
+    val (year, preRelease, number) = gradleRioBundleRegex.find(gradleRioVersion.trim())?.destructured ?: return null
+    return when (preRelease.lowercase())
+    {
+        "alpha" -> "${year}_alpha$number"
+        "beta"  -> "${year}beta"
+        else    -> year
+    }
+}
+
 /**
  * Fetches, and caches, the listing of vendor libraries available in the
  * [WPILib Vendor JSON Repository](https://github.com/wpilibsuite/vendor-json-repo) for a project year.
@@ -93,13 +110,17 @@ class VendorJsonRepoService
 
     /**
      * Gets the libraries available for the provided project year (i.e. the `projectYear` value from the `wpilib_preferences.json`
-     * file, such as "2026" or "2026beta"). If no bundle exists for the exact project year, the bundle for just the year is tried.
-     * **This makes network calls and must not be called on the EDT.**
+     * file, such as "2026" or "2026beta"). If no bundle exists for the exact project year, the bundle for just the year is tried,
+     * then the [fallbackBundleNames] (e.g. the bundle for the project's GradleRIO version, for a `projectYear` such as
+     * "intellisense" that is not a year). **This makes network calls and must not be called on the EDT.**
      */
-    fun getLibraries(projectYear: String, forceRefresh: Boolean = false, indicator: ProgressIndicator? = null): Result<VendorRepoBundle, Exception>
+    fun getLibraries(projectYear: String, forceRefresh: Boolean = false, indicator: ProgressIndicator? = null,
+                     fallbackBundleNames: List<String> = emptyList()): Result<VendorRepoBundle, Exception>
     {
-        val candidates = linkedSetOf(projectYear.trim().lowercase())
+        val candidates = linkedSetOf<String>()
+        projectYear.trim().lowercase().ifBlank { null }?.let { candidates.add(it) }
         extractProjectYear(projectYear)?.let { candidates.add(it.toString()) }
+        fallbackBundleNames.forEach { candidates.add(it.trim().lowercase()) }
 
         var lastError: Exception? = null
         for (bundleName in candidates)

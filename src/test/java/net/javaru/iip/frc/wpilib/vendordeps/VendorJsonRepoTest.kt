@@ -16,6 +16,7 @@
 
 package net.javaru.iip.frc.wpilib.vendordeps
 
+import com.github.michaelbull.result.getOrThrow
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import java.util.*
@@ -39,6 +40,36 @@ internal class VendorJsonRepoTest
     {
         assertTrue(compareVersionText(newer, older) > 0, "Expected $newer > $older")
         assertTrue(compareVersionText(older, newer) < 0, "Expected $older < $newer")
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "2027.0.0-alpha-7, 2027_alpha7",
+        "2027.0.0-alpha7,  2027_alpha7",
+        "2026.0.0-beta-3,  2026beta",
+        "2026.2.1,         2026",
+        "2025.3.2,         2025",
+        "latest.release,   ",
+              )
+    fun `the vendor repo bundle is named from the GradleRIO version`(gradleRioVersion: String, expected: String?)
+    {
+        assertEquals(expected, vendorRepoBundleName(gradleRioVersion))
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+        "'\"wpilibYear\": \"2027_alpha7\"', 2027", // 2027 vendordeps, e.g. YAMS's (versioned by date, e.g. 2026.10.15)
+        "'\"frcYear\": 2026',               2026",
+        "'\"frcYear\": \"2026beta\"',       2026",
+        "'\"frcYear\": 2026, \"wpilibYear\": \"2027_alpha7\"', 2027", // a 2027 vendordeps that kept its frcYear
+        "'\"other\": 1',                    ",
+              )
+    fun `the season is read from frcYear (before 2027) and wpilibYear (2027 on)`(yearProperty: String, expected: Int?)
+    {
+        val json = """{"name": "YAMS", "version": "2026.10.15", "uuid": "a1051e86-a979-4880-a28b-a0d5362d1d96", "fileName": "yams.json", $yearProperty}"""
+        val vendordeps = Vendordeps.parse(json).getOrThrow()
+        assertEquals(expected, vendordeps.frcYear)
+        if (expected == 2027) assertEquals(2027, vendordeps.likelySeasonYear())
     }
 
     @ParameterizedTest

@@ -222,6 +222,7 @@ internal class WpiLibCppCompilationDatabaseTest
             |}""".trimMargin())
         writePreferences(groovy, "cpp", projectYear = "2026")
         assertEquals(2027, findProjectYear(groovy))
+        assertEquals("2027.0.0-alpha-7", findGradleRioVersion(groovy))
 
         val kotlin = dir.resolve("kotlin").createDirectories()
         kotlin.resolve("build.gradle.kts").writeText("""plugins { id("edu.wpi.first.GradleRIO") version "2026.2.1" }""")

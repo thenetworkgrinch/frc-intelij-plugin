@@ -74,22 +74,26 @@ data class Vendordeps(
         {
             val name = json.string("name")?.trim() ?: ""
             val version = LibVersion.parse(json.string("version")?.trim() ?: "0.0.0")
-            val frcYear = try
-            {
-                json.int("frcYear")
-            }
-            catch (t: ClassCastException)
-            {
-                // frcYear should be an int. But just in case a vendor enters it as a String, we want to handle it.
-                // Beta/alpha vendordeps use values such as "2026beta", so we extract just the year in such cases.
-                json.string("frcYear")?.let { it.trim().toIntOrNull() ?: extractProjectYear(it) }
-            }
+            // The season is 'frcYear' before 2027, and 'wpilibYear' (e.g. "2027_alpha7", as the WPILib project year) from 2027 on.
+            // If both are present (e.g. a 2027 vendordeps that kept its 'frcYear'), the later one is used.
+            val frcYear = listOfNotNull(json.parseYear("frcYear"), json.parseYear("wpilibYear")).maxOrNull()
             val fileName = json.string("fileName")?.trim() ?: ""
             val jsonUrl = json.uri("jsonUrl")
             val mavenUrls = json.urisList("mavenUrls")
             val uuid = json.parseUuid(name, fileName, jsonUrl)
             return Vendordeps(uuid, name, version, frcYear, fileName, jsonUrl, mavenUrls)
 
+        }
+
+        private fun JsonObject.parseYear(key: String): Int? = try
+        {
+            int(key)
+        }
+        catch (t: ClassCastException)
+        {
+            // The year should be an int. But just in case a vendor enters it as a String, we want to handle it.
+            // Beta/alpha vendordeps use values such as "2026beta" or "2027_alpha7", so we extract just the year in such cases.
+            string(key)?.let { it.trim().toIntOrNull() ?: extractProjectYear(it) }
         }
 
         private const val navxUuidString = "cb311d09-36e9-4143-a032-55bb2b94443b"
@@ -166,7 +170,7 @@ private val uuidRegex =     """"uuid"\s*:\s*"(?<jsonValue>[^"]+)"""".toRegex() /
 private val fileNameRegex = """"fileName"\s*:\s*"(?<jsonValue>[^"]+)"""".toRegex()
 private val nameRegex =     """"name"\s*:\s*"(?<jsonValue>[^"]+)"""".toRegex()
 private val versionRegex =  """"version"\s*:\s*"(?<jsonValue>[^"]+)"""".toRegex()
-private val frcYearRegex =  """"frcYear"\s*:\s*"?(?<jsonValue>[^",]+)"?,""".toRegex()
+private val frcYearRegex =  """"(?:frcYear|wpilibYear)"\s*:\s*"?(?<jsonValue>[^",]+)"?,""".toRegex()
 private val jsonUrlRegex =  """"jsonUrl"\s*:\s*"(?<jsonValue>[^"]+)"""".toRegex()
 data class InvalidVendordepsProjectFile(val jsonPsiFile: JsonFile)
 {
@@ -199,7 +203,7 @@ data class InvalidVendordepsProjectFile(val jsonPsiFile: JsonFile)
             val libVersionString = versionRegex.findJsonValue()
             val libVersion = libVersionString?.let { LibVersion.parse(it) }
             val libFrcYearString = frcYearRegex.findJsonValue()
-            val libFrcYear = libFrcYearString?.letSafely { it.toInt() }
+            val libFrcYear = libFrcYearString?.letSafely { it.toIntOrNull() ?: extractProjectYear(it) }
             val libJsonUrlString = jsonUrlRegex.findJsonValue()
             val libJsonUrl = libJsonUrlString.letSafely { URI(it) }
             
