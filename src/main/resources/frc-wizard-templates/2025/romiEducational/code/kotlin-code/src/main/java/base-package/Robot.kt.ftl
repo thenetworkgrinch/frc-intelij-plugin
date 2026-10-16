@@ -51,7 +51,6 @@ object [=data.robotClassSimpleName] : EducationalRobot()
         // Report the use of the Kotlin Language for "FRC Usage Report" statistics.
         // Please retain this line so that Kotlin's growing use by teams is seen by FRC/WPI.
         HAL.report(tResourceType.kResourceType_Language, tInstances.kLanguage_Kotlin, 0, WPILibVersion.Version)
-        RobotContainer
     }
 
     /** This method is run when the robot is enabled.  */

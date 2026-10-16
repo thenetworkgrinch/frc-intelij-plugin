@@ -587,6 +587,7 @@ class FrcModuleBuilder : JavaModuleBuilder(), ModuleBuilderListener
                 it.name.contains("WPILibOldCommands") -> dataModel.frcWizardTemplateDefinition.commandVersion == 1
                 it.name.contains("WPILibNewCommands") -> dataModel.frcWizardTemplateDefinition.commandVersion == 2
                 it.name.contains("XRPVendordep")      -> dataModel.isXrpTemplate// include only if this is an XRP robot template
+                it.name.contains("RomiVendordep")     -> dataModel.isRomiTemplate // include only if this is a Romi robot template
                 // default to including/keeping the file, since this also covers configs/.wpilib/wpilib_preferences.json file, and others
                 else -> true
             }

@@ -65,8 +65,6 @@ object [=data.robotClassSimpleName] : RobotBase() {
 
     override fun startCompetition()
     {
-        robotInit()
-
         val modeThread = DriverStationModeThread()
         val event = WPIUtilJNI.createEvent(false, false)
         DriverStation.provideRefreshedDataEventHandle(event)

@@ -23,9 +23,6 @@ package [=data.basePackage]
 import edu.wpi.first.hal.FRCNetComm.tInstances
 import edu.wpi.first.hal.FRCNetComm.tResourceType
 import edu.wpi.first.hal.HAL
-import edu.wpi.first.hal.FRCNetComm.tInstances
-import edu.wpi.first.hal.FRCNetComm.tResourceType
-import edu.wpi.first.hal.HAL
 import edu.wpi.first.wpilibj.util.WPILibVersion
 
 /**

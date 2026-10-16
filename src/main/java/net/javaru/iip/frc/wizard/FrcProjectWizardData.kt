@@ -140,6 +140,7 @@ class FrcProjectWizardData(
                 2023 -> """https\://services.gradle.org/distributions/gradle-7.5.1-bin.zip"""
                 2024 -> """https\://services.gradle.org/distributions/gradle-8.5-bin.zip"""
                 2025 -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
+                2026 -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
                 else -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
             }
             return if (useGradleAllDistribution || FrcApplicationSettings.getInstance().isTeam3838() || teamNumber == 3838)
@@ -200,8 +201,9 @@ class FrcProjectWizardData(
 
     companion object
     {
-        val baselineVersion = ApplicationInfo.getInstance().build.baselineVersion
-        private val defaultKotlinVersion: KotlinVersion =
+        // Lazy so that class initialization does not depend on the ApplicationInfo service
+        val baselineVersion: Int by lazy { ApplicationInfo.getInstance().build.baselineVersion }
+        private val defaultKotlinVersion: KotlinVersion by lazy {
             if (baselineVersion < 211)
                 KotlinVersion(1, 5, 31)
             else
@@ -220,6 +222,7 @@ class FrcProjectWizardData(
                     241, 242, 243 -> KotlinVersion(2, 1, 0)  // 2.1.0
                     else          -> KotlinVersion(2, 1, 0)  // 2.1.0
                 }
+        }
     }
 }
 

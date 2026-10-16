@@ -30,14 +30,14 @@ import edu.wpi.first.wpilibj.util.WPILibVersion;
 public class ${data.robotClassSimpleName} extends TimedRobot
 {
     <#if data.getIncludeKotlinSupport()>
-    public void Robot()
+    public ${data.robotClassSimpleName}()
     {
         // Report the use of Kotlin for "FRC Usage Report" statistics.
         // Please only remove if you remove *all* use of Kotlin from the robot.
         HAL.report(tResourceType.kResourceType_Language, tInstances.kLanguage_Kotlin, 0, WPILibVersion.Version);
     }
     <#else>
-    public void Robot() {}
+    public ${data.robotClassSimpleName}() {}
     </#if>
     
     

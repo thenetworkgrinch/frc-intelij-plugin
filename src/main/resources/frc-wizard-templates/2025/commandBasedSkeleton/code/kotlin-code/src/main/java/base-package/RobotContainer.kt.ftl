@@ -21,6 +21,7 @@
 package [=data.basePackage]
 
 import edu.wpi.first.wpilibj2.command.Command
+import edu.wpi.first.wpilibj2.command.Commands
 
 /**
  * This class is where the bulk of the robot should be declared. Since Command-based is a
@@ -46,9 +47,8 @@ object RobotContainer
 
     }
 
-    fun getAutonomousCommand(): Command?
+    fun getAutonomousCommand(): Command
     {
-        // TODO: Implement properly
-        return null
+        return Commands.print("No autonomous command configured")
     }
 }

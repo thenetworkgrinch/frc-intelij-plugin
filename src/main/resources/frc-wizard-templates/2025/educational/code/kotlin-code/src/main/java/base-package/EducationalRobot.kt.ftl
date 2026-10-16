@@ -20,9 +20,11 @@
 </#compress>
 package [=data.basePackage]
 
-import edu.wpi.first.hal.HAL
+import edu.wpi.first.hal.DriverStationJNI
+import edu.wpi.first.util.WPIUtilJNI
 import edu.wpi.first.wpilibj.DriverStation
 import edu.wpi.first.wpilibj.RobotBase
+import edu.wpi.first.wpilibj.internal.DriverStationModeThread
 
 /**
  * Educational robot base class. Do NOT use for competitions.
@@ -42,7 +44,7 @@ open class EducationalRobot : RobotBase() {
         run()
     }
 
-    fun test() {
+    open fun test() {
         run()
     }
 

@@ -27,7 +27,6 @@ import edu.wpi.first.wpilibj.TimedRobot
 import edu.wpi.first.wpilibj.util.WPILibVersion
 import edu.wpi.first.wpilibj2.command.Command
 import edu.wpi.first.wpilibj2.command.CommandScheduler
-import [=data.basePackage].commands.Autos
 
 /**
  * The functions in this object (which basically functions as a singleton class) are called automatically

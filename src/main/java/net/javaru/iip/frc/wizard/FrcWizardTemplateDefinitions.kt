@@ -145,7 +145,8 @@ fun projectTemplateDefinitionsFor(year: Int): Array<FrcWizardTemplateDefinition>
         2023 -> FrcWizard2023ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2024 -> FrcWizard2024ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2025 -> FrcWizard2025ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
-        else -> FrcWizard2025ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        2026 -> FrcWizard2026ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        else -> FrcWizard2026ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
     }
 }
 fun exampleTemplateDefinitionsFor(version: WpiLibVersion): Array<FrcWizardTemplateDefinition> = exampleTemplateDefinitionsFor(version.frcYear)
@@ -161,7 +162,8 @@ fun exampleTemplateDefinitionsFor(year:Int): Array<FrcWizardTemplateDefinition>
         2023 -> FrcWizard2023ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2024 -> FrcWizard2024ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2025 -> FrcWizard2025ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
-        else -> FrcWizard2025ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        2026 -> FrcWizard2026ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        else -> FrcWizard2026ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
     }
 }
 
@@ -1470,7 +1472,7 @@ enum class FrcWizard2025ExampleTemplateDefinition(
     TankDrive("Tank Drive", "Demonstrates the use of the RobotDrive class doing teleop driving with tank steering (i.e. two joysticks)."),
     ArcadeDrive("Arcade Drive", "Demonstrates the use of the DifferentialDrive class to drive a robot with arcade drive/steering (i.e. single joystick)."),
     MecanumDrive("Mecanum Drive", "Demonstrates the use of the RobotDrive class doing teleop driving with a Mecanum drivetrain."),
-    PdpCanMonitoring("PDP CAN Monitoring", "Demonstrates using CAN to monitor the voltage, current, and temperature in the Power Distribution Panel (PDP)."),
+    PdpCanMonitoring("PDP CAN Monitoring", "Demonstrates using CAN to monitor the voltage, current, and temperature in the Power Distribution Panel (PDP).", _templateResourcesDirName = "canPDP"),
     Solenoids("Solenoids", "Demonstrates controlling a single and double solenoid from Joystick buttons."),
     Encoder("Encoder", "Demonstrates displaying the value of a quadrature encoder on the SmartDashboard."),
     Relay("Relay", "Demonstrates controlling a Relay from Joystick buttons."),
@@ -1483,9 +1485,9 @@ enum class FrcWizard2025ExampleTemplateDefinition(
     Gyro("Gyro", "Demonstrates how to drive straight using a gyro sensor."),
     GyroMecanum("Gyro Mecanum", "Demonstrates how to perform mecanum drive with field oriented controls."),
     HIDRumble("HID Rumble", "Demonstrates how to make human interface devices rumble.", _templateResourcesDirName = "HIDRumble"),
-    Mechanism2D("Mechanism2D", "An example usage of Mechanism2d to display mechanism states on a dashboard.", _templateResourcesDirName = "mechanism2D"),
+    Mechanism2D("Mechanism2D", "An example usage of Mechanism2d to display mechanism states on a dashboard.", _templateResourcesDirName = "Mechanism2D"),
     MotorController("Motor Controller", "Demonstrates controlling a single motor with a joystick."),
-    SimpleVision("Simple Vision", "Demonstrates the use of the CameraServer class to stream from a USB Webcam without processing the images."),
+    SimpleVision("Simple Vision", "Demonstrates the use of the CameraServer class to stream from a USB Webcam without processing the images.", _templateResourcesDirName = "quickVision"),
     IntermediateVision("Intermediate Vision", "An example program that acquires images from an attached USB camera and adds some annotation to the image as you might do for showing operators the result of some image recognition, and sends it to the dashboard for display."),
     ShuffleboardSample("Shuffleboard Sample", "An example program that adds data to various Shuffleboard tabs, demonstrating the Shuffleboard API."),
     HatchbotTraditional(
@@ -1517,12 +1519,266 @@ enum class FrcWizard2025ExampleTemplateDefinition(
                          ),
     MecanumControllerCommand("MecanumControllerCommand", "An example command-based robot demonstrating the use of a MecanumControllerCommand to follow a pregenerated trajectory.",),
     SwerveControllerCommand("SwerveControllerCommand", "An example command-based robot demonstrating the use of a SwerveControllerCommand to follow a pregenerated trajectory.",),
-    DifferentialDrivePoseEstimator("DifferentialDrivePoseEstimator", "Demonstrates the use of the DifferentialDrivePoseEstimator as a replacement for differential drive odometry."),
+    DifferentialDrivePoseEstimator("DifferentialDrivePoseEstimator", "Demonstrates the use of the DifferentialDrivePoseEstimator as a replacement for differential drive odometry.", _templateResourcesDirName = "DifferentialDrivePoseEstimator"),
     SimpleDifferentialDriveSimulation("SimpleDifferentialDriveSimulation", "An example of a minimal drivetrain simulation project without the command-based library."),
     MecanumDrivePoseEstimator("MecanumDrivePoseEstimator", "Demonstrates the use of the MecanumDrivePoseEstimator as a replacement for mecanum drive odometry."),
     SwerveDrivePoseEstimator("SwerveDrivePoseEstimator", "Demonstrates the use of the SwerveDrivePoseEstimator as a replacement for swerve drive odometry."),
     DigitalCommunication("DigitalCommunication", "An example that communicates with external devices (such as an Arduino) using the roboRIO's DIO", templateRequiresJUnit = true),
-    I2CCommunication("I2CCommunication", "An example that communicates with external devices (such as an Arduino) using the roboRIO's I2C port", templateRequiresJUnit = true),
+    I2CCommunication("I2CCommunication", "An example that communicates with external devices (such as an Arduino) using the roboRIO's I2C port", templateRequiresJUnit = true, _templateResourcesDirName = "I2CCommunication"),
+    EventLoop("EventLoop", "Demonstrates managing a ball system using EventLoop and BooleanEvent."),
+    RapidReactCommandBot("RapidReactCommandBot", "A fully-functional command-based fender bot for the 2022 game using the new command framework."),
+    UnitTesting("UnitTesting", "Demonstrates basic unit testing for a robot project.", templateRequiresJUnit = true),
+    AprilTagsVision("AprilTags Vision", "On-roboRIO detection of AprilTags using an attached USB camera."),
+    HttpCamera("HTTP Camera", """Acquire images from an HTTP network camera and adds some annotation to the image (as you might do for showing operators the result of some image recognition), and sends it to the dashboard for display."""),
+    ElevatorExponentialProfile("Elevator with exponential profile", "Reach elevator position setpoints with exponential profiles and smart motor controller PID."),
+    ElevatorExponentialSimulation("Elevator Exponential Profile Simulation", "Simulate an elevator."),
+    FlywheelBangBangController("Flywheel BangBangController", "A sample program to demonstrate the use of a BangBangController with a flywheel to control RPM"),
+    SysIdRoutine("SysIdRoutine", """A sample command-based robot demonstrating use of the SysIdRoutine command factory"""),
+
+    ;
+
+
+    override val description: String
+        @Language("HTML") get() = "<html>$_description</html>"
+
+    override val displayNameAndDescription: String
+        @Language("HTML") get() = "<html><strong>$displayName</strong> : ${_description}${createDeprecationNotice(this)}</html>"
+
+    override fun toString(): String = "${displayName}${if (this.isDeprecated) " (Deprecated)" else ""}"
+
+    override fun templateResourcesDirName(): String =
+        _templateResourcesDirName ?: if (name.length >= 2 && Character.isUpperCase(name[0]) && Character.isUpperCase(name[1])) name else name.decapitalize2()
+
+    override fun isProjectBootstrapTemplate(): Boolean = false
+}
+
+enum class FrcWizard2026ProjectTemplateDefinition(
+    override val displayName: String,
+    @field:Language("HTML") @param:Language("HTML") private val _description: String,
+    override val isDeprecated: Boolean = false,
+    override val deprecationAlternative: String? = null,
+    override val commandVersion: Int = 2,
+    override val robotType: RobotType = RobotType.roboRIO,
+    override val isExample: Boolean = false,
+    override val templateRequiresJUnit: Boolean = false,
+    override val includeAutoGenReadMe: Boolean = false,
+    override val availableTemplateLanguages: List<TemplateLanguageOption> = templateLanguageOptionListJavaOnly,
+    private val _templateResourcesDirName: String? = null,
+                                                 ) : FrcWizardTemplateDefinition
+{
+    // New Command Based docs: https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html
+    CommandBased(
+        "Command Based Robot",
+        """A robot project for coding robots using the Command Based framework/API. 
+            |Command Based robots allow complex functionality to be developed from simpler functionality/components. 
+            |See the 
+            |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a> 
+            |section of the WPI Lib Docs for more information.""".trimMargin(),
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                ),
+    CommandBasedSkeleton(
+        "Command Based Robot Skeleton (Intermediate)",
+        """A skeleton robot project for coding robots using the Command Based framework/API. This template
+            |differs from "Command Based Robot" in that this one has no example implementations. It includes
+            |an empty Subsystem and an empty Command to serve as placeholders only.
+            |Command Based robots allow complex functionality to be developed from simpler functionality/components. 
+            |See the 
+            |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a> 
+            |section of the WPI Lib Docs for more information.""".trimMargin(),
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                ),
+    Educational(
+        "Educational Robot",
+        """Educational Robot that is <b><em>not</em> for competition use,</b> but instead is a simple robot that can be used for teaching purposes. 
+            |""".trimMargin(),
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin,
+        includeAutoGenReadMe = true
+               ),
+    Timed(
+        "Timed Robot",
+        "A robot project that allows robots to be implemented in an iterative manner synced to a timer.",
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+         ),
+    TimedSkeleton(
+        "Timed Skeleton (Advanced)",
+        "A skeleton (stub) Timed Robot project for advanced programmers.",
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                 ),
+    TimeSlice(
+        "Timeslice Robot",
+        "A TimesliceRobot.",
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+             ),
+    TimeSliceSkeleton(
+        "Timeslice Skeleton (Advanced)",
+        "Skeleton (stub) code for TimesliceRobot.",
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                     ),
+    RobotBaseSkeleton(
+        "RobotBase Skeleton (Highly Advanced)",
+        "A skeleton (stub) for RobotBase, intended for <strong>highly advanced/experienced</strong> programmers, that provides more complete control over program flow.",
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                     ),
+    RomiCommand(
+        "Romi - Command Robot",
+        """Romi Robot using the Command Based framework/API, which allows complex functionality to be 
+                    |developed from simpler functionality/components. See the 
+                    |<a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Getting Started with Romi</a> and
+                    |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a>
+                    |sections of the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.Romi,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+               ),
+    RomiTimed(
+        "Romi - Timed Robot",
+        """Romi Robot using TimedRobot as the base class, allowing robots to be implemented in an iterative manner 
+                  |synced to a timer. See the 
+                  |<a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Romi Robot</a> section of 
+                  |the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.Romi,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+             ),
+    RomiEducational(
+        "Romi - Educational Robot",
+        """Romi Educational Robot based on a simple robot that can be used for teaching purposes.
+                  |See the <a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Romi Robot</a> section of 
+                  |the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.Romi,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin
+                   ),
+
+    XrpCommandBased(
+        "XRP - Command Robot",
+        """XRP Robot using the Command Based framework/API, which allows complex functionality to be 
+                  |developed from simpler functionality/components. XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform.
+                  |See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a> and
+                  |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a>
+                  |sections of the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.XRP,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin,
+                 ),
+    XrpEducational(
+        "XRP - Educational Robot",
+        """XRP Educational Robot based on a simple robot that can be used for teaching purposes. 
+                  |XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform.
+                  |See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a>
+                  |section of the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.XRP,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin,
+                 ),
+    XrpTimed(
+        "XRP - Timed Robot",
+        """Robot using TimedRobot as the base class, allowing robots to be implemented in an iterative manner 
+                  |synced to a timer. XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform.
+                  |See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a>
+                  |section of the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.XRP,
+        availableTemplateLanguages = templateLanguageOptionListJavaAndKotlin,
+                 ),
+
+    ;
+
+
+    override val description: String
+       @Language("HTML") get() = "<html>$_description</html>"
+
+    override val displayNameAndDescription: String
+       @Language("HTML") get() = "<html><strong>$displayName</strong> : ${_description}${createDeprecationNotice(this)}</html>"
+
+    override fun toString(): String = "${displayName}${if (this.isDeprecated) " (Deprecated)" else ""}"
+
+    override fun templateResourcesDirName(): String =
+        _templateResourcesDirName ?: if (name.length >= 2 && Character.isUpperCase(name[0]) && Character.isUpperCase(name[1])) name else name.decapitalize2()
+
+    override fun isProjectBootstrapTemplate(): Boolean = true
+}
+
+enum class FrcWizard2026ExampleTemplateDefinition(
+    override val displayName: String,
+    @field:Language("HTML") @param:Language("HTML") private val _description: String,
+    override val isDeprecated: Boolean = false,
+    override val deprecationAlternative: String? = null,
+    override val commandVersion: Int = 2,
+    override val robotType: RobotType = RobotType.roboRIO,
+    override val isExample: Boolean = true,
+    override val templateRequiresJUnit: Boolean = false,
+    override val includeAutoGenReadMe: Boolean = true,
+    private val _templateResourcesDirName: String? = null,
+                                                 ) : FrcWizardTemplateDefinition
+{
+    RomiReference(
+        "Romi Reference",
+        """An example command-based robot program that can be used with the Romi reference robot design.
+                      |See the <a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Getting Started with Romi</a> and
+                      |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a>
+                      |sections of the WPI Lib Docs for more information.""".trimMargin(),
+        robotType = RobotType.Romi
+                 ),
+    XrpReference("XRP Reference",
+                 """An example command-based robot program that can be used with the XRP reference robot design.
+                      |XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform.
+                      |See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a> and
+                      |<a href="https://docs.wpilib.org/en/stable/docs/software/commandbased/index.html">Command-Based Programming</a>
+                      |sections of the WPI Lib Docs for more information.""".trimMargin(),
+                 robotType = RobotType.XRP,
+                ),
+    GettingStarted("Getting Started", "An example project which demonstrates the simplest autonomous and teleoperated routines."),
+    TankDrive("Tank Drive", "Demonstrates the use of the RobotDrive class doing teleop driving with tank steering (i.e. two joysticks)."),
+    ArcadeDrive("Arcade Drive", "Demonstrates the use of the DifferentialDrive class to drive a robot with arcade drive/steering (i.e. single joystick)."),
+    MecanumDrive("Mecanum Drive", "Demonstrates the use of the RobotDrive class doing teleop driving with a Mecanum drivetrain."),
+    PdpCanMonitoring("PDP CAN Monitoring", "Demonstrates using CAN to monitor the voltage, current, and temperature in the Power Distribution Panel (PDP).", _templateResourcesDirName = "canPDP"),
+    Solenoids("Solenoids", "Demonstrates controlling a single and double solenoid from Joystick buttons."),
+    Encoder("Encoder", "Demonstrates displaying the value of a quadrature encoder on the SmartDashboard."),
+    Relay("Relay", "Demonstrates controlling a Relay from Joystick buttons."),
+    Ultrasonic("Ultrasonic", "Demonstrates maintaining a set distance using an ultrasonic sensor."),
+    UltrasonicPID("Ultrasonic PID", "Demonstrates maintaining a set distance using an ultrasonic sensor and PID Control.", templateRequiresJUnit = true),
+    PotentiometerPID("Potentiometer PID", "Demonstrates the use of a potentiometer and PID control to reach elevator position setpoints.", templateRequiresJUnit = true),
+    ElevatorTrapezoidProfiledPid("Elevator with trapezoid profiled PID", "An example to demonstrate the use of an encoder and trapezoid profiled PID control to reach elevator position setpoints."),
+    ElevatorProfiledPidController("Elevator with profiled PID controller", "An example to demonstrate the use of an encoder and profiled PID control to reach elevator position setpoints."),
+    ElevatorSimulation("Elevator Simulation", "Demonstrates the use of physics simulation with a simple elevator.", templateRequiresJUnit = true),
+    Gyro("Gyro", "Demonstrates how to drive straight using a gyro sensor."),
+    GyroMecanum("Gyro Mecanum", "Demonstrates how to perform mecanum drive with field oriented controls."),
+    HIDRumble("HID Rumble", "Demonstrates how to make human interface devices rumble.", _templateResourcesDirName = "HIDRumble"),
+    Mechanism2D("Mechanism2D", "An example usage of Mechanism2d to display mechanism states on a dashboard.", _templateResourcesDirName = "Mechanism2D"),
+    MotorController("Motor Controller", "Demonstrates controlling a single motor with a joystick."),
+    SimpleVision("Simple Vision", "Demonstrates the use of the CameraServer class to stream from a USB Webcam without processing the images.", _templateResourcesDirName = "quickVision"),
+    IntermediateVision("Intermediate Vision", "An example program that acquires images from an attached USB camera and adds some annotation to the image as you might do for showing operators the result of some image recognition, and sends it to the dashboard for display."),
+    ShuffleboardSample("Shuffleboard Sample", "An example program that adds data to various Shuffleboard tabs, demonstrating the Shuffleboard API."),
+    HatchbotTraditional(
+        "'Traditional' Hatchbot",
+        "A fully-functional command-based hatch bot for the 2019 game using the command framework/API.  Written in the 'traditional' style, i.e. commands are given their own classes.",
+                     _templateResourcesDirName = "hatchBotTraditional"  ),
+    HatchbotInlined(
+        "'Inlined' Hatchbot",
+        "A fully-functional command-based hatch bot for the 2019 game using the command framework/API.  Written in the 'inlined' style, i.e. many commands are defined inline with lambdas.",
+                   _templateResourcesDirName = "hatchBotInlined"),
+    SelectCommand("Select Command Example", "An example showing how to use the SelectCommand class from the command framework/API."),
+    SwerveBot("SwerveBot", "An example program for a swerve drive that uses swerve drive kinematics and odometry.",),
+    MecanumBot("MecanumBot", "An example program for a mecanum drive that uses mecanum drive kinematics and odometry.",),
+    DifferentialDriveBot("DifferentialDriveBot", "An example program for a differential drive that uses differential drive kinematics and odometry.",),
+    StateSpaceFlywheel("StateSpaceFlywheel", "An example state-space controller for a flywheel."),
+    StateSpaceFlywheelSysId("StateSpaceFlywheelSysId", "An example state-space controller for controlling a flywheel with System Identification."),
+    StateSpaceElevator("StateSpaceElevator", "An example state-space controller for controlling an elevator."),
+    StateSpaceArm("StateSpaceArm", "An example state-space controller for controlling an arm."),
+    ArcadeDriveXboxController("Arcade Drive Xbox Controller", "Demonstrates the use of the DifferentialDrive class to drive a robot with Arcade Drive and an Xbox Controller"),
+    TankDriveXboxController("Tank Drive Xbox Controller", "Demonstrates the use of the DifferentialDrive class to drive a robot with Tank Drive and an Xbox Controller"),
+    DutyCycleEncoder("Duty Cycle Encoder", "Demonstrates the use of the Duty Cycle Encoder class.",),
+    DutyCycleInput("Duty Cycle Input", "Demonstrates the use of the Duty Cycle class.",),
+    AddressableLED("Addressable LED", "Demonstrates the use of the Addressable LED class.", templateRequiresJUnit = true),
+    DMA("DMA", "Demonstrates the use of the DMA class", _templateResourcesDirName = "DMA"),
+    ArmSimulation("Arm Simulation", "Demonstrates the use of physics simulation with a simple single-jointed arm.", templateRequiresJUnit = true),
+    DriveDistanceOffboard(
+        "Drive Distance Offboard",
+        "An example command-based robot demonstrating the use of a TrapezoidProfileCommand to drive a robot a set distance with offboard PID on the drive.",
+                         ),
+    MecanumControllerCommand("MecanumControllerCommand", "An example command-based robot demonstrating the use of a MecanumControllerCommand to follow a pregenerated trajectory.",),
+    SwerveControllerCommand("SwerveControllerCommand", "An example command-based robot demonstrating the use of a SwerveControllerCommand to follow a pregenerated trajectory.",),
+    DifferentialDrivePoseEstimator("DifferentialDrivePoseEstimator", "Demonstrates the use of the DifferentialDrivePoseEstimator as a replacement for differential drive odometry.", _templateResourcesDirName = "DifferentialDrivePoseEstimator"),
+    SimpleDifferentialDriveSimulation("SimpleDifferentialDriveSimulation", "An example of a minimal drivetrain simulation project without the command-based library."),
+    MecanumDrivePoseEstimator("MecanumDrivePoseEstimator", "Demonstrates the use of the MecanumDrivePoseEstimator as a replacement for mecanum drive odometry."),
+    SwerveDrivePoseEstimator("SwerveDrivePoseEstimator", "Demonstrates the use of the SwerveDrivePoseEstimator as a replacement for swerve drive odometry."),
+    DigitalCommunication("DigitalCommunication", "An example that communicates with external devices (such as an Arduino) using the roboRIO's DIO", templateRequiresJUnit = true),
+    I2CCommunication("I2CCommunication", "An example that communicates with external devices (such as an Arduino) using the roboRIO's I2C port", templateRequiresJUnit = true, _templateResourcesDirName = "I2CCommunication"),
     EventLoop("EventLoop", "Demonstrates managing a ball system using EventLoop and BooleanEvent."),
     RapidReactCommandBot("RapidReactCommandBot", "A fully-functional command-based fender bot for the 2022 game using the new command framework."),
     UnitTesting("UnitTesting", "Demonstrates basic unit testing for a robot project.", templateRequiresJUnit = true),
