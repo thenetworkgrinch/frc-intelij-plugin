@@ -33,6 +33,7 @@ import com.intellij.openapi.externalSystem.service.project.ExternalProjectRefres
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.startup.StartupManager
+import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.util.DocumentUtil
 import net.javaru.iip.frc.facet.isFrcFacetedProject
@@ -43,6 +44,8 @@ import net.javaru.iip.frc.settings.FrcApplicationSettings
 import net.javaru.iip.frc.util.asDate
 import net.javaru.iip.frc.util.computeInSmartReadAction
 import net.javaru.iip.frc.util.getGradleBuildPsiFile
+import net.javaru.iip.frc.util.isGroovyPluginAvailable
+import net.javaru.iip.frc.services.GroovyGradleBuildPsi
 import net.javaru.iip.frc.util.lastCheckedDateTimeFormatter
 import net.javaru.iip.frc.util.reimportGradleProject
 import net.javaru.iip.frc.util.runBackgroundTask
@@ -51,20 +54,13 @@ import net.javaru.iip.frc.wpilib.gradlePluginRepo.GradleRioMavenMetadataState
 import net.javaru.iip.frc.wpilib.version.WpiLibVersion
 import net.javaru.iip.frc.wpilib.version.WpiLibVersionImpl
 import net.javaru.iip.frc.wpilib.version.filterToLatestForYear
-import org.jetbrains.plugins.groovy.lang.psi.GroovyFile
-import org.jetbrains.plugins.groovy.lang.psi.GroovyPsiElement
-import org.jetbrains.plugins.groovy.lang.psi.GroovyRecursiveElementVisitor
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.blocks.GrClosableBlock
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrApplicationStatement
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrCommandArgumentList
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrReferenceExpression
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals.GrLiteral
-import org.jetbrains.plugins.groovy.lang.psi.impl.PsiImplUtil
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.*
 
 const val gradleRioId = "edu.wpi.first.GradleRIO"
+/** Matches the GradleRIO plugin declaration (e.g. `id "edu.wpi.first.GradleRIO" version "2026.2.1"`), capturing its version. */
+private val gradleRioPluginVersionRegex = Regex("""\bid\s*\(?\s*["'](?:edu\.wpi\.first|org\.wpilib)\.GradleRIO["']\s*\)?\s*version\s*\(?\s*["']([^"']+)["']""")
 
 // GitConflictsToolWindowManager is a good example of using the StartupActivity
 // AcceptedLanguageLevelsSettings sows a class tha is both a StartupActivity and an application Service
@@ -281,7 +277,7 @@ class WpiLibVersionService private constructor(private val project: Project) : P
             }
             else
             {
-                if (psiFile is GroovyFile)
+                if (isGroovyPluginAvailable && GroovyGradleBuildPsi.isGroovyFile(psiFile))
                 {
                     /*
 
@@ -306,68 +302,32 @@ class WpiLibVersionService private constructor(private val project: Project) : P
 
                                 apply plugin: "edu.wpi.first.GradleRIO"
                      */
-
-                    // Examples of working with a Gradle PSI file:
-                    //     ConvertGStringToStringIntention.processIntention()
-                    //     GradleMiscContributor.process()
-
-                    psiFile.accept(
-                        object : GroovyRecursiveElementVisitor()
-                        {
-                            override fun visitElement(element: GroovyPsiElement)
-                            {
-                                super.visitElement(element)
-                                if (element is GrReferenceExpression && element.qualifiedReferenceName == "plugins")
-                                {
-                                    // We have the plugins block… now let's find the GradleRIO declaration
-                                    var block: PsiElement? = element.nextSibling
-                                    while (block != null && block !is GrClosableBlock)
-                                    {
-                                        block = block.nextSibling
-                                    }
-
-                                    if (block is GrClosableBlock)
-                                    {
-                                        val children = block.children
-                                        // children will include things like PsiWhiteSpace, PsiElement(new line), GrParameterList (likely empty)
-                                        // We want the "call expressions" which are the plugin declarations
-
-                                        val gradleRioCallExpression = children
-                                            .filterIsInstance<GrApplicationStatement>()
-                                            .firstOrNull { it.text.contains(gradleRioId) }
-
-                                        if (gradleRioCallExpression == null)
-                                        {
-                                            logger.warn("[FRC] Could not find GradleRIO plugin Call Expression in order to update the WPI Lib / GradleRIO plugin")
-                                            FrcNotifyType.ACTIONABLE_WARN
-                                                .withContent(FrcMessageKey.of("frc.notification.wpiLibVersionStatus.gradle.not.able.to.update", version.versionString))
-                                                .notify(project)
-                                        }
-                                        else
-                                        {
-                                            // The Call Expression has two primary children
-                                            //     GrReferenceExpression [Reference Expression] : "id "edu.wpi.first.GradleRIO" version"
-                                            //     GrCommandArgumentList [Command Arguments] : "2021.2.3"
-                                            gradleRioCallExpression
-                                                .children
-                                                .filterIsInstance<GrCommandArgumentList>()
-                                                .firstOrNull()
-                                                ?.children
-                                                ?.filterIsInstance<GrLiteral>()
-                                                ?.firstOrNull()
-                                                ?.let { literal: GrLiteral ->
-                                                    val replacement =
-                                                        if (literal.text?.startsWith('\'') == true)
-                                                            "'${version.versionString}'"
-                                                        else "\"${version.versionString}\""
-                                                    PsiImplUtil.replaceExpression(replacement, literal)
-                                                    doGradleReimport()
-                                                }
-                                        }
-                                    }
-                                }
-                            }
-                        }) // close accept
+                    if (!GroovyGradleBuildPsi.updateGradleRioVersion(psiFile, gradleRioId, version.versionString) { doGradleReimport() })
+                    {
+                        logger.warn("[FRC] Could not find GradleRIO plugin Call Expression in order to update the WPI Lib / GradleRIO plugin")
+                        FrcNotifyType.ACTIONABLE_WARN
+                            .withContent(FrcMessageKey.of("frc.notification.wpiLibVersionStatus.gradle.not.able.to.update", version.versionString))
+                            .notify(project)
+                    }
+                }
+                else if (!isGroovyPluginAvailable && psiFile.name.endsWith(".gradle", ignoreCase = true))
+                {
+                    // e.g. in CLion, where the Groovy plugin is not available, the plugin declaration's version is updated in the file's text
+                    val document = PsiDocumentManager.getInstance(project).getDocument(psiFile)
+                    val versionRange = document?.let { gradleRioPluginVersionRegex.find(it.text)?.groups?.get(1)?.range }
+                    if (versionRange == null)
+                    {
+                        logger.warn("[FRC] Could not find the GradleRIO plugin declaration in order to update the WPI Lib / GradleRIO plugin")
+                        FrcNotifyType.ACTIONABLE_WARN
+                            .withContent(FrcMessageKey.of("frc.notification.wpiLibVersionStatus.gradle.not.able.to.update", version.versionString))
+                            .notify(project)
+                    }
+                    else
+                    {
+                        document.replaceString(versionRange.first, versionRange.last + 1, version.versionString)
+                        PsiDocumentManager.getInstance(project).commitDocument(document)
+                        doGradleReimport()
+                    }
                 }
                 else if (psiFile.name.endsWith(".kts", ignoreCase = true))
                 {

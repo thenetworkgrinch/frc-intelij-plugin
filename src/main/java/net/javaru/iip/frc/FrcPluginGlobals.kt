@@ -20,6 +20,7 @@ import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.pom.java.LanguageLevel
+import com.intellij.util.lang.JavaVersion
 import org.apache.commons.lang3.BooleanUtils
 
 object FrcPluginGlobals
@@ -40,10 +41,12 @@ object FrcPluginGlobals
     /** A logger name `#net.javaru.iip.frc` for logging plugin level events. It should be used sparingly. */
     @JvmField
     val GENERAL_LOGGER = Logger.getInstance("#net.javaru.iip.frc")
+    // A getter rather than a field: LanguageLevel is part of the Java plugin, which is not available in CLion. A field would
+    // make initializing this object (which almost everything does) fail there.
+    val DEFAULT_MIN_REQUIRED_LANGUAGE_LEVEL: LanguageLevel
+        get() = LanguageLevel.JDK_11
     @JvmField
-    val DEFAULT_MIN_REQUIRED_LANGUAGE_LEVEL = LanguageLevel.JDK_11
-    @JvmField
-    val DEFAULT_MIN_REQUIRED_JAVA_VERSION = DEFAULT_MIN_REQUIRED_LANGUAGE_LEVEL.toJavaVersion()
+    val DEFAULT_MIN_REQUIRED_JAVA_VERSION: JavaVersion = JavaVersion.compose(11)
     @JvmField
     val IS_IN_FRC_INTERNAL_MODE = BooleanUtils.toBoolean(System.getProperty("frc.is.internal", false.toString()))
     @JvmField

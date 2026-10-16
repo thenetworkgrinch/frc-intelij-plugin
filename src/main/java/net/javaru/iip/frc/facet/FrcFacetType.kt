@@ -20,9 +20,9 @@ import com.intellij.facet.Facet
 import com.intellij.facet.FacetType
 import com.intellij.facet.FacetTypeRegistry
 import com.intellij.facet.ui.DefaultFacetSettingsEditor
-import com.intellij.openapi.module.JavaModuleType
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleType
+import net.javaru.iip.frc.util.isJavaPluginAvailable
 import com.intellij.openapi.project.Project
 import icons.FrcIcons.FRC
 import javax.swing.Icon
@@ -62,7 +62,8 @@ class FrcFacetType : FacetType<FrcFacet, FrcFacetConfiguration>(FrcFacet.FACET_T
 
     override fun isSuitableModuleType(moduleType: ModuleType<*>): Boolean
     {
-        return moduleType is JavaModuleType
+        // The Java module type is checked by its ID, since the Java plugin is not available in CLion, where modules of any type can be used
+        return !isJavaPluginAvailable || moduleType.id == "JAVA_MODULE"
     }
 
 

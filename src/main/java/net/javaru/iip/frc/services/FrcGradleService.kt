@@ -21,13 +21,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import net.javaru.iip.frc.util.getGradleBuildPsiFile
+import net.javaru.iip.frc.util.isGroovyPluginAvailable
 import net.javaru.iip.frc.wizard.FrcProjectWizardData
-import org.jetbrains.plugins.groovy.lang.psi.GroovyFile
-import org.jetbrains.plugins.groovy.lang.psi.GroovyPsiElement
-import org.jetbrains.plugins.groovy.lang.psi.GroovyRecursiveElementVisitor
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.GrVariable
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.GrReferenceExpression
-import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals.GrLiteral
 
 
 // Keep an eye on:  com.intellij.externalSystem.DependencyModifierService
@@ -35,6 +30,9 @@ import org.jetbrains.plugins.groovy.lang.psi.api.statements.expressions.literals
 // It does not (yet) support modifying a Plugin version. But JetBrains seems to indicate
 // that that is possibly planned:
 // https://intellij-support.jetbrains.com/hc/en-us/community/posts/360010674120-Programatically-Update-Plugin-Version-in-Gradle-Build-File
+
+/** Matches the `includeDesktopSupport` variable declaration, capturing its value, for when the Groovy plugin is not available. */
+private val includeDesktopSupportRegex = Regex("""\bincludeDesktopSupport\s*=\s*(true|false)\b""")
 
 class FrcGradleService private constructor(val project: Project)
 {
@@ -94,27 +92,11 @@ class FrcGradleService private constructor(val project: Project)
             }
             else
             {
-                when (psiFile)
-                {
-                    is GroovyFile -> {
-                        psiFile.accept(
-                            object : GroovyRecursiveElementVisitor()
-                            {
-                                override fun visitElement(element: GroovyPsiElement)
-                                {
-                                    super.visitElement(element)
-                                    if (element is GrVariable && element.name == "includeDesktopSupport")
-                                    {
-                                        val literal = element.children.asSequence().filter { it is GrLiteral }.firstOrNull()
-                                        result = literal?.firstChild?.text?.toBoolean()
-                                    }
-                                }
-                            })
-                    }
-                    else -> {
-                        logger.info("[FRC] non groovy gradle files is not yet supported. Cloud not lookup includeDesktopSupport setting.")
-                    }
-                }
+                result = if (isGroovyPluginAvailable && GroovyGradleBuildPsi.isGroovyFile(psiFile))
+                    GroovyGradleBuildPsi.findIncludeDesktopSupport(psiFile)
+                else
+                    // e.g. in CLion, where the Groovy plugin is not available
+                    includeDesktopSupportRegex.find(psiFile.text)?.groupValues?.get(1)?.toBoolean()
             }
         }
         catch (e: Exception)
@@ -151,42 +133,11 @@ class FrcGradleService private constructor(val project: Project)
             }
             else
             {
-                when (psiFile)
-                {
-                    is GroovyFile ->
-                    {
-                        result = false
-                        psiFile.accept(
-                            object : GroovyRecursiveElementVisitor()
-                            {
-                                override fun visitReferenceExpression(referenceExpression: GrReferenceExpression)
-                                {
-                                    super.visitReferenceExpression(referenceExpression)
-
-                                    if (useContains)
-                                    {
-                                        if (referenceExpression.text.contains(targetText))
-                                        {
-                                            result = true
-                                        }
-                                    }
-                                    else
-                                    {
-                                        if (referenceExpression.text == targetText)
-                                        {
-                                            result = true
-                                        }
-                                    }
-
-                                }
-                            }
-                                      )
-                    }
-                    else          ->
-                    {
-                        logger.info("[FRC] non groovy gradle files is not yet supported. Unable to determine if includeDesktopSupport setting.")
-                    }
-                }
+                result = if (isGroovyPluginAvailable && GroovyGradleBuildPsi.isGroovyFile(psiFile))
+                    GroovyGradleBuildPsi.hasReferenceText(psiFile, targetText, useContains)
+                else
+                    // e.g. in CLion, where the Groovy plugin is not available
+                    if (useContains) psiFile.text.contains(targetText) else Regex("""(?<![\w.])${Regex.escape(targetText)}(?![\w.])""").containsMatchIn(psiFile.text)
             }
         }
         catch (e: Exception)

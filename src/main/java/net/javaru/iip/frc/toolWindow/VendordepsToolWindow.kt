@@ -49,6 +49,9 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
@@ -72,6 +75,8 @@ import net.javaru.iip.frc.wpilib.isWpiLibProject
 import net.javaru.iip.frc.util.runBackgroundTask
 import net.javaru.iip.frc.wpilib.findWpiLibProjectRootDirs
 import net.javaru.iip.frc.wpilib.getConfiguredProjectYear
+import net.javaru.iip.frc.wpilib.wpiLibDirName
+import net.javaru.iip.frc.wpilib.wpiLibPreferencesFileName
 import net.javaru.iip.frc.wpilib.vendordeps.VendorJsonRepoService
 import net.javaru.iip.frc.wpilib.vendordeps.VendorRepoLibrary
 import net.javaru.iip.frc.wpilib.vendordeps.VendordepsListingListener
@@ -172,6 +177,12 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
     /** The year, as an Int, of the project's configured `projectYear`; `null` until loaded or if it could not be determined. */
     @Volatile
     private var projectYearNumber: Int? = null
+    /** The configured `projectYear` the libraries were (last) loaded for, so they are reloaded when it changes (e.g. when the project is updated to a new WPILib version). */
+    @Volatile
+    private var loadedProjectYear: String? = null
+    /** Whether the libraries are to be reloaded once the current load completes. */
+    @Volatile
+    private var reloadRequested = false
     private var showBetas: Boolean
         get() = PropertiesComponent.getInstance().getBoolean(showBetasPropertyKey, false)
         set(value) = PropertiesComponent.getInstance().setValue(showBetasPropertyKey, value, false)
@@ -233,8 +244,30 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
             // Only newly installed vendordeps' jsonUrls are fetched since the results are cached
             if (showBetas) loadBetas(forceRefresh = false)
         })
+        listenForProjectYearChanges()
 
         loadRepoLibraries(forceRefresh = false)
+    }
+
+    /** Reloads the libraries when the project year in the `wpilib_preferences.json` file changes, as the available libraries are for the year. */
+    private fun listenForProjectYearChanges()
+    {
+        project.messageBus.connect(this).subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener
+        {
+            override fun after(events: List<VFileEvent>)
+            {
+                if (events.none { it.path.endsWith("/$wpiLibDirName/$wpiLibPreferencesFileName") }) return
+                ApplicationManager.getApplication().executeOnPooledThread {
+                    if (project.isDisposed) return@executeOnPooledThread
+                    val projectYear = project.getConfiguredProjectYear()
+                    if (projectYear != loadedProjectYear)
+                    {
+                        logger.info("[FRC] The project year changed from '$loadedProjectYear' to '$projectYear'. Reloading the vendor libraries.")
+                        invokeLater { loadRepoLibraries(forceRefresh = false) }
+                    }
+                }
+            }
+        })
     }
 
     /** Actions for the tool window's options (i.e. "gear" or "more") menu. */
@@ -272,7 +305,11 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
 
     private fun loadRepoLibraries(forceRefresh: Boolean)
     {
-        if (isLoading) return
+        if (isLoading)
+        {
+            reloadRequested = true
+            return
+        }
         isLoading = true
         list.emptyText.text = "Loading vendor libraries…"
         project.runBackgroundTask("Loading FRC vendor libraries", cancellable = true) { indicator ->
@@ -280,6 +317,7 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
             {
                 indicator.text = "Reading project year from wpilib_preferences.json"
                 val projectYear = project.getConfiguredProjectYear()
+                loadedProjectYear = projectYear
                 projectYearNumber = extractProjectYear(projectYear)
                 if (projectYear == null)
                 {
@@ -313,7 +351,12 @@ class VendordepsToolWindowPanel(private val project: Project) : SimpleToolWindow
             finally
             {
                 isLoading = false
-                if (showBetas) invokeLater { loadBetas(forceRefresh) }
+                if (reloadRequested)
+                {
+                    reloadRequested = false
+                    invokeLater { loadRepoLibraries(forceRefresh = false) }
+                }
+                else if (showBetas) invokeLater { loadBetas(forceRefresh) }
             }
         }
     }

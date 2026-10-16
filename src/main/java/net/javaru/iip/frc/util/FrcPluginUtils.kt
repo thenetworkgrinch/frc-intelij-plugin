@@ -117,6 +117,15 @@ fun classIsAvailable(name: String): Boolean
     }
 }
 
+/**
+ * Whether the (optional) Java plugin is available. It is not in CLion, so code that uses the Java plugin's APIs (such as Java run
+ * configurations or JDKs) must only be called when this is true.
+ */
+val isJavaPluginAvailable: Boolean by lazy { classIsAvailable("com.intellij.openapi.projectRoots.JavaSdk") }
+
+/** Whether the (optional) Groovy plugin is available. It is not in CLion, so Groovy PSI must only be used when this is true. */
+val isGroovyPluginAvailable: Boolean by lazy { classIsAvailable("org.jetbrains.plugins.groovy.lang.psi.GroovyFile") }
+
 @JvmOverloads
 fun getPluginClassloader(clazz: Class<*> = FrcIcons::class.java): ClassLoader = clazz.classLoader
 

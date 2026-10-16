@@ -78,6 +78,7 @@ import net.javaru.iip.frc.i18n.FrcBundle;
 import net.javaru.iip.frc.riolog.ui.FrcRioLogToolWindowExecutor;
 import net.javaru.iip.frc.services.FrcGradleService;
 import net.javaru.iip.frc.settings.FrcApplicationSettings;
+import net.javaru.iip.frc.util.FrcPluginUtilsKt;
 
 
 
@@ -202,7 +203,11 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
             }
         };
 
-        myProcessHandler.putUserDataIfAbsent(BuildManager.ALLOW_AUTOMAKE, true);
+        // BuildManager is part of the Java plugin, which is not available in CLion
+        if (FrcPluginUtilsKt.isJavaPluginAvailable())
+        {
+            myProcessHandler.putUserDataIfAbsent(BuildManager.ALLOW_AUTOMAKE, true);
+        }
 
         myConsoleView = createConsole(myProject, myProcessHandler);
         // There is the possibility that myProcessHandler is null when the lambda gets called

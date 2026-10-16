@@ -269,12 +269,14 @@
     <!-- please see https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html on how to target different products -->
     <!-- The unique identifiers of the plugins on which this plugin depends. -->
     <!-- ALSO UPDATE GRADLE BUILD FILE -->
+    <!-- Java, Kotlin, and Groovy are optional so the plugin also works in CLion (for C++ robot projects), where they are not available. -->
     <depends>com.intellij.modules.lang</depends>
-    <depends>com.intellij.modules.java</depends>
     <depends>com.intellij.gradle</depends>
-    <depends>org.intellij.groovy</depends>
-    <depends>org.jetbrains.kotlin</depends>
     <depends>com.intellij.modules.json</depends>
+    <depends optional="true" config-file="frc-java.xml">com.intellij.modules.java</depends>
+    <depends optional="true" config-file="frc-kotlin.xml">org.jetbrains.kotlin</depends>
+    <depends optional="true" config-file="frc-groovy.xml">org.intellij.groovy</depends>
+    <depends optional="true" config-file="frc-clion.xml">com.intellij.clion-compdb</depends>
     <depends optional="true" config-file="shellScriptOptionalPlugin.xml">com.jetbrains.sh</depends>
     <!--<depends>AntSupport</depends>-->
 
@@ -323,10 +325,6 @@
         <iconProvider id="FRC.FrcIconProvider" order="first" implementation="net.javaru.iip.frc.services.FrcIconProvider" />
         <fileIconProvider id="FRC.FrcFIleIconProvider" order="first"  implementation="net.javaru.iip.frc.services.FrcIconProvider" />
 
-        <stepsBeforeRunProvider implementation="net.javaru.iip.frc.run.WpiLibSimulateExternalBeforeRunTaskProvider" />
-        <configurationType implementation="net.javaru.iip.frc.run.WpiLibSimulationConfigurationType" />
-        <executor id="FrcProfileRobot" implementation="net.javaru.iip.frc.run.FrcProfileRobotExecutor" />
-        <programRunner implementation="net.javaru.iip.frc.run.FrcRobotProfilingProgramRunner" />
         <executor id="FrcRioLogToolWindowExecutor" implementation="net.javaru.iip.frc.riolog.ui.FrcRioLogToolWindowExecutor" />
 
         <spellchecker.bundledDictionaryProvider implementation="net.javaru.iip.frc.spellchecker.FrcBundledDictionaryProvider" />
@@ -389,54 +387,12 @@
 
         <fileTemplateGroup implementation="net.javaru.iip.frc.templates.FrcFileTemplateGroupDescriptorFactory" />
 
-        <!--
-            While  the custom FrcModuleType is deprecated, we need to leave it in to prevent errors when opening older projects that were created with it.
-            It's use was limited to a few weeks in Nov 2019 in v0.8.0 & v0.8.1, and was removed in the next release later in November.
-            Still, let's keep it around until at least **May 2023** (i.e. 3 build seasons) to prevent issues.
-            See notes in the FrcModuleType class and in issue #41: https://gitlab.com/Javaru/frc-intellij-idea-plugin/issues/41
-            Module type ID must match that defined in the FrcModuleType class.
-        -->
-        <!--suppress DeprecatedClassUsageInspection -->
-        <moduleBuilder id="FrcModuleBuilder" builderClass="net.javaru.iip.frc.wizard.FrcModuleBuilder" order="last" />
 
-        
-        <!-- dependencySupport: Notifies users that a plugin supporting a particular dependency is available and asks if they want to install it -->
-        <dependencySupport displayName="FRC WPILib"     kind="java" coordinate="edu.wpi.first.wpilibj:wpilibj-java" />
-        <!-- COMMENTING OUT COMMAND LIBS FOR NOW:
-             The displayName is currently not getting used, resulting in dependency coordinates getting used. See https://youtrack.jetbrains.com/issue/IDEA-275873
-             When it shows both the main lib and the command lib coordinates, the resulting message is very dense, especially given how long the command coordinates are. 
-             Since the command libs depend on the primary lib, we should be fine just specifying the main lib for now, giving a better message. -->
-        <!--<dependencySupport displayName="FRC WPILib"     kind="java" coordinate="edu.wpi.first.wpilibNewCommands:wpilibNewCommands-java" />
-        <dependencySupport displayName="FRC WPILib"     kind="java" coordinate="edu.wpi.first.wpilibOldCommands:wpilibOldCommands-java" />-->
-        <dependencySupport displayName="FRC GradleRIO"  kind="java" coordinate="edu.wpi.first:GradleRIO" />
+    </extensions>
 
-        <localInspection id="FRC.HungarianNotationConstantsInspection"
-                         groupPath="FRC"
-                         language="JAVA"
-                         suppressId="HungarianNotationConstants"
-                         shortName="HungarianNotationConstants"
-                         bundle="i18n.FrcInspectionsBundle"
-                         key="frc.inspections.hungarian.notation.k.constants.display.name"
-                         groupKey="frc.inspections.group.path.naming.conventions"
-                         enabledByDefault="true"
-                         level="WEAK WARNING"
-                         cleanupTool="true"
-                         implementationClass="net.javaru.iip.frc.inspections.HungarianNotationConstantsInspection"
-                         />
-        <localInspection id="FRC.HungarianNotationMemberVariablesInspection"
-                         groupPath="FRC"
-                         language="JAVA"
-                         suppressId="HungarianNotationMemberVariables"
-                         shortName="HungarianNotationMemberVariables"
-                         bundle="i18n.FrcInspectionsBundle"
-                         key="frc.inspections.hungarian.notation.member.variables.display.name"
-                         groupKey="frc.inspections.group.path.naming.conventions"
-                         enabledByDefault="true"
-                         level="WEAK WARNING"
-                         cleanupTool="true"
-                         implementationClass="net.javaru.iip.frc.inspections.HungarianNotationMemberVariablesInspection"
-                         />
-
+    <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
+        <!-- Lets the Gradle sync of WPILib C++ projects succeed when a robot toolchain is not installed -->
+        <projectResolve implementation="net.javaru.iip.frc.cpp.WpiLibCppGradleSyncArgumentsResolverExtension" />
     </extensions>
 
     <extensions defaultExtensionNs="JavaScript.JsonSchema">
@@ -518,133 +474,6 @@
                     class="net.javaru.iip.frc.actions.tools.ShowRioLogUdpConsoleAction" />
         </group>
 
-        <group id="FRC.CreateRunConfigsActionGroup"
-               class="net.javaru.iip.frc.actions.FrcRunConfigCreationActionGroup"
-               popup="true"
-               icon="AllIcons.RunConfigurations.Compound">
-            <add-to-group group-id="FRC.FrcToolsActionsGroup" anchor="after" relative-to-action="frc.tools.CheckForWpiLibUpdateAction" />
-            <action id="frc.crate.run.config.CreateRunDebugConfigurationsAction"
-                    class="net.javaru.iip.frc.actions.tools.CreateRunDebugConfigurationsAction"
-                    icon="GradleIcons.Gradle" />
-            <action id="frc.crate.run.config.LaunchShuffleboard"
-                    class="net.javaru.iip.frc.actions.CreateLaunchShuffleboardRunConfigurationAction"
-                    icon="AllIcons.Vcs.Changelist" />
-            <action id="frc.crate.run.config.LaunchSmartDashboard"
-                    class="net.javaru.iip.frc.actions.CreateLaunchSmartDashboardRunConfigurationAction"
-                    icon="AllIcons.Vcs.Changelist" />
-        </group>
-
-        <group id="frc.NewFileTemplates.JavaProjects"
-               text="FRC"
-               class="net.javaru.iip.frc.actions.FrcJavaBasedProjectsCreateComponentsActionGroup"
-               popup="true"
-               icon="FrcIcons.FRC.FIRST_ICON_MEDIUM_16">
-            <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFile" />
-        </group>
-
-        <!-- region new component action groups -->
-        <group id="frc.NewFileTemplates.KotlinProjects"
-               text="FRC"
-               class="net.javaru.iip.frc.actions.FrcKotlinBasedProjectsCreateComponentsActionGroup"
-               popup="true"
-               icon="FrcIcons.FRC.FIRST_ICON_MEDIUM_16">
-            <add-to-group group-id="NewGroup" anchor="before" relative-to-action="NewFile" />
-        </group>
-
-        <group id="frc.NewFileTemplates.KotlinTemplates"
-               text="Kotlin"
-               class="net.javaru.iip.frc.actions.FrcCreateKotlinComponentsActionGroup"
-               popup="true"
-               icon="FrcIcons.Tech.Kotlin.KOTLIN_13_SVG">
-            <add-to-group group-id="frc.NewFileTemplates.KotlinProjects" anchor="first" />
-        </group>
-
-        <group id="frc.NewFileTemplates.JavaTemplates"
-               text="Java"
-               class="net.javaru.iip.frc.actions.FrcCreateJavaComponentsActionGroup"
-               popup="true"
-               icon="FrcIcons.Tech.Java.JAVA_SVG">
-            <add-to-group group-id="frc.NewFileTemplates.KotlinProjects" anchor="last" />
-        </group>
-        <!-- endregion new component action groups -->
-
-        <!-- region new component actions -->
-        <action id="frc.action.new.command1"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.command.v1.Command1ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-        </action>
-        <action id="frc.action.new.commandGroup1"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.commandGroup.v1.CommandGroup1ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-        </action>
-        <action id="frc.action.new.subsystem1"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.subsystem.v1.Subsystem1ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-        </action>
-        <action id="frc.action.new.pidSubsystem1"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.pidSubsystem.v1.PidSubsystem1ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-        </action>
-        <action id="frc.action.new.trigger1"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.trigger.v1.Trigger1ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-        </action>
-        <action id="frc.action.new.command2.java"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.command.v2.Command2JavaComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.command2.kotlin"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.command.v2.Command2KotlinComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.KotlinTemplates" />
-        </action>
-        <action id="frc.action.new.commandGroup2"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.commandGroup.v2.CommandGroup2JavaComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.commandGroup2.kotlin"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.commandGroup.v2.CommandGroup2KotlinComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.KotlinTemplates" />
-        </action>
-        <action id="frc.action.new.subsystem2.java"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.subsystem.v2.Subsystem2JavaComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.subsystem2.kotlin"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.subsystem.v2.Subsystem2KotlinComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.KotlinTemplates" />
-        </action>
-        <action id="frc.action.new.trapezoidProfileSubsystem2"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.trapezoidProfileSubsystem.v2.TrapezoidProfileSubsystem2ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.pidSubsystem2"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.pidSubsystem.v2.PidSubsystem2ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.profiledPidSubsystem2"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.profiledPidSubsystem.v2.ProfiledPidSubsystem2ComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.trigger2.java"
-                class="net.javaru.iip.frc.actions.create.advanced.cmdBased.trigger.v2.Trigger2JavaComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.JavaTemplates" />
-        </action>
-        <action id="frc.action.new.trigger2.kotlin"
-                            class="net.javaru.iip.frc.actions.create.advanced.cmdBased.trigger.v2.Trigger2KotlinComponentCreationAction">
-            <add-to-group group-id="frc.NewFileTemplates.JavaProjects" />
-            <add-to-group group-id="frc.NewFileTemplates.KotlinTemplates" />
-        </action>
-        <!-- endregion new component actions -->
 
         <action id="frc.configureTeamNumberBasicAction"
                 class="net.javaru.iip.frc.actions.ConfigureTeamNumberBasicAction"
