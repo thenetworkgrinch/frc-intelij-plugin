@@ -88,16 +88,89 @@ internal class WpiLibCppCompilationDatabaseTest
         writeCompileCommands(projectRoot, "windowsx86-64debug", "src/main/cpp/Robot.cpp" to "cl.exe", "src/test/cpp/RobotTest.cpp" to "cl.exe")
         writeCompileCommands(projectRoot, "windowsx86-64release", "src/test/cpp/OtherTest.cpp" to "cl.exe")
 
-        val merged = JsonParser.parseString(mergeCompileCommands(projectRoot, "linuxsystemcoredebug", findCompileCommandsTargets(projectRoot)))
-            .asJsonArray.map { it.asJsonObject.get("file").asString to it.asJsonObject.get("arguments").asJsonArray[0].asString }
+        val merged = mergeCompileCommands(listOf(projectRoot), null)!!
 
-        assertEquals(listOf("src/main/cpp/Robot.cpp" to "g++", "src/test/cpp/RobotTest.cpp" to "cl.exe"), merged)
+        assertEquals(mapOf(projectRoot to "linuxsystemcoredebug"), merged.primaryTargets)
+        assertEquals(listOf("src/main/cpp/Robot.cpp" to "g++", "src/test/cpp/RobotTest.cpp" to "cl.exe"), merged.files())
     }
 
-    private fun writeCompileCommands(projectRoot: Path, target: String, vararg files: Pair<String, String>)
+    @Test
+    fun `the compile commands of several projects are merged, using a file compiled by several projects from the first`(@TempDir dir: Path)
+    {
+        val robot = dir.resolve("examples/robot")
+        val library = dir.resolve("library")
+        val shared = dir.resolve("shared/src/Shared.cpp").toString()
+        writeCompileCommands(robot, "linuxsystemcoredebug", "src/main/cpp/Robot.cpp" to "g++", shared to "g++", directory = robot.toString())
+        writeCompileCommands(library, "linuxsystemcoredebug", "../shared/src/Shared.cpp" to "lib-g++", "src/Library.cpp" to "lib-g++", directory = library.toString())
+
+        val merged = mergeCompileCommands(listOf(robot, library), null)!!
+
+        assertEquals(listOf("src/main/cpp/Robot.cpp" to "g++", shared to "g++", "src/Library.cpp" to "lib-g++"), merged.files())
+        assertEquals(listOf("linuxsystemcoredebug", "linuxsystemcoredebug"), merged.primaryTargets.values.toList())
+        assertNull(mergeCompileCommands(listOf(dir.resolve("none")), null))
+    }
+
+    @Test
+    fun `WPILib C++ projects are found in subdirectories, but not in other WPILib projects or build directories`(@TempDir dir: Path)
+    {
+        writePreferences(dir.resolve("vendordep"), "cpp")
+        writePreferences(dir.resolve("examples/cpptest"), "cpp")
+        writePreferences(dir.resolve("examples/cpptest/nested"), "cpp")
+        writePreferences(dir.resolve("examples/javatest"), "java")
+        writePreferences(dir.resolve("examples/javatest/nested"), "cpp")
+        writePreferences(dir.resolve("examples/build/generated"), "cpp")
+        writePreferences(dir.resolve(".hidden/robot"), "cpp")
+        writePreferences(dir.resolve("a/b/c/tooDeep"), "cpp")
+
+        assertEquals(listOf(dir.resolve("examples/cpptest"), dir.resolve("vendordep")), findNestedCppProjectRoots(dir))
+        assertEquals(listOf(dir.resolve("vendordep")), findNestedCppProjectRoots(dir.resolve("vendordep")))
+    }
+
+    @Test
+    fun `robot projects are told apart from libraries by their frcUserProgram`(@TempDir dir: Path)
+    {
+        dir.resolve("robot").createDirectories().resolve("build.gradle").writeText("model { components { frcUserProgram(NativeExecutableSpec) {} } }")
+        dir.resolve("library").createDirectories().resolve("build.gradle").writeText("model { components { YAMS(NativeLibrarySpec) {} } }")
+        assertTrue(isRobotProjectDir(dir.resolve("robot")))
+        assertFalse(isRobotProjectDir(dir.resolve("library")))
+        assertFalse(isRobotProjectDir(dir.resolve("none")))
+    }
+
+    @Test
+    fun `the project year is from the GradleRIO version, otherwise from the WPILib preferences`(@TempDir dir: Path)
+    {
+        val groovy = dir.resolve("groovy").createDirectories()
+        groovy.resolve("build.gradle").writeText("""plugins {
+            |    id "org.wpilib.GradleRIO" version "2027.0.0-alpha-7"
+            |}""".trimMargin())
+        writePreferences(groovy, "cpp", projectYear = "2026")
+        assertEquals(2027, findProjectYear(groovy))
+
+        val kotlin = dir.resolve("kotlin").createDirectories()
+        kotlin.resolve("build.gradle.kts").writeText("""plugins { id("edu.wpi.first.GradleRIO") version "2026.2.1" }""")
+        assertEquals(2026, findProjectYear(kotlin))
+
+        val noGradleRio = dir.resolve("noGradleRio")
+        writePreferences(noGradleRio, "cpp", projectYear = "Beta2025-2")
+        assertEquals(2025, findProjectYear(noGradleRio))
+        writePreferences(noGradleRio, "cpp", projectYear = "intellisense")
+        assertNull(findProjectYear(noGradleRio))
+    }
+
+    private fun MergedCompileCommands.files(): List<Pair<String, String>> =
+        JsonParser.parseString(json).asJsonArray.map { it.asJsonObject.get("file").asString to it.asJsonObject.get("arguments").asJsonArray[0].asString }
+
+    private fun writePreferences(projectRoot: Path, language: String, projectYear: String = "2027")
+    {
+        projectRoot.resolve(".wpilib").createDirectories().resolve("wpilib_preferences.json")
+            .writeText("""{"currentLanguage": "$language", "projectYear": "$projectYear", "teamNumber": 3838}""")
+    }
+
+    private fun writeCompileCommands(projectRoot: Path, target: String, vararg files: Pair<String, String>, directory: String = ".")
     {
         val dir = projectRoot.resolve("build/TargetedCompileCommands").resolve(target).createDirectories()
-        val entries = files.joinToString(",") { (file, compiler) -> """{"directory": ".", "file": "$file", "arguments": ["$compiler", "-c"]}""" }
+        val json = { s: String -> s.replace("\\", "\\\\") }
+        val entries = files.joinToString(",") { (file, compiler) -> """{"directory": "${json(directory)}", "file": "${json(file)}", "arguments": ["$compiler", "-c"]}""" }
         dir.resolve(compileCommandsFileName).writeText("[$entries]")
     }
 }

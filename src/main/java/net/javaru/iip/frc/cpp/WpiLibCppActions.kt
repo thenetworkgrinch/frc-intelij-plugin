@@ -35,7 +35,7 @@ abstract class AbstractWpiLibCppAction : AnAction(), DumbAware
     override fun update(e: AnActionEvent)
     {
         val project = e.project
-        e.presentation.isEnabledAndVisible = project != null && WpiLibCppCompilationDatabaseService.getInstance(project).findCppProjectRoot() != null
+        e.presentation.isEnabledAndVisible = project != null && WpiLibCppCompilationDatabaseService.getInstance(project).cppProjectRoots.isNotEmpty()
     }
 }
 

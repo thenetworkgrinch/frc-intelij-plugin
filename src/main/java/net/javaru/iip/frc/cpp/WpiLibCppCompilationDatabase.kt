@@ -18,6 +18,7 @@ package net.javaru.iip.frc.cpp
 
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.intellij.execution.RunManager
 import com.intellij.execution.configurations.GeneralCommandLine
@@ -32,6 +33,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.util.SystemInfo
 import com.intellij.openapi.util.io.FileUtil
@@ -43,11 +45,14 @@ import com.intellij.util.Alarm
 import net.javaru.iip.frc.notify.FrcNotifyType
 import net.javaru.iip.frc.run.findWpiLibJdkHome
 import net.javaru.iip.frc.util.isJavaPluginAvailable
+import net.javaru.iip.frc.wpilib.extractProjectYear
 import net.javaru.iip.frc.wpilib.findWpiLibProjectRootDirs
-import net.javaru.iip.frc.wpilib.getConfiguredProjectYearJustYear
-import net.javaru.iip.frc.wpilib.readWpiLibPreferences
+import net.javaru.iip.frc.wpilib.isWpiLibProjectLayoutPath
+import net.javaru.iip.frc.wpilib.projectYearPropertyName
+import net.javaru.iip.frc.wpilib.wpiLibDirName
 import org.jetbrains.plugins.gradle.service.execution.GradleExternalTaskConfigurationType
 import org.jetbrains.plugins.gradle.service.execution.GradleRunConfiguration
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Year
@@ -68,6 +73,9 @@ import kotlin.io.path.writeText
  * the include paths of the WPILib and vendordep headers (which Gradle downloads from their Maven repos and extracts), along with
  * the compiler, defines, and flags. The selected target's compilation database is written to the project's root directory, and
  * loaded as CLion's Compilation Database project model. It is regenerated whenever the Gradle build or vendordeps change.
+ *
+ * The opened directory may instead contain several WPILib C++ projects (e.g. a vendor library repository with its library and
+ * example robot projects in subdirectories), in which case their compilation databases are merged into one in the opened directory.
  */
 
 private object WpiLibCppCompilationDatabase
@@ -104,8 +112,42 @@ private const val selectedTargetKey = "FRC.cppCompileCommandsTarget"
 private val compileCommandsInputFiles = listOf("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", ".wpilib/wpilib_preferences.json")
 private const val vendordepsDirName = "vendordeps"
 
-/** Whether the project is a WPILib C++ project, i.e. its `.wpilib/wpilib_preferences.json` file's `currentLanguage` is `cpp`. */
-fun Project.isWpiLibCppProject(): Boolean = readWpiLibPreferences()?.get("currentLanguage")?.toString()?.trim().equals("cpp", ignoreCase = true)
+/** How many directory levels below the opened directory are searched for WPILib C++ projects, e.g. `examples/MyRobot`. */
+private const val nestedProjectSearchDepth = 3
+
+/** Directories that are not searched for WPILib C++ projects (along with hidden directories), as they hold build output or downloads. */
+private val nestedProjectSearchSkippedDirNames = setOf("build", "bin", "out", "obj", "gradle", "node_modules", "vendordeps", "docs")
+
+/**
+ * Finds the WPILib C++ projects in, or below, the directory. A WPILib project's subdirectories are not searched, and neither are
+ * hidden, build output, or download directories.
+ */
+fun findNestedCppProjectRoots(dir: Path, depth: Int = nestedProjectSearchDepth): List<Path>
+{
+    if (dir.resolve(wpiLibDirName).isDirectory()) return if (isWpiLibCppProjectDir(dir)) listOf(dir) else emptyList()
+    if (depth <= 0) return emptyList()
+    val subdirs = try
+    {
+        dir.listDirectoryEntries().filter { it.isDirectory() && !it.name.startsWith(".") && it.name.lowercase() !in nestedProjectSearchSkippedDirNames }
+    }
+    catch (e: IOException)
+    {
+        emptyList()
+    }
+    return subdirs.sortedBy { it.name }.flatMap { findNestedCppProjectRoots(it, depth - 1) }
+}
+
+/** Whether the WPILib C++ project is a robot project (rather than, e.g., a vendor library), i.e. its Gradle build has an `frcUserProgram`. */
+fun isRobotProjectDir(projectRoot: Path): Boolean =
+    listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.any { it.isRegularFile() && it.readText().contains("frcUserProgram") }
+
+private val gradleRioYearRegex = Regex("""GradleRIO['"]?\)?\s+version\s+['"](\d{4})""")
+
+/** The project's year, from its GradleRIO version, or else from its `.wpilib/wpilib_preferences.json` file. */
+fun findProjectYear(projectRoot: Path): Int? =
+    listOf("build.gradle", "build.gradle.kts").map { projectRoot.resolve(it) }.filter { it.isRegularFile() }
+        .firstNotNullOfOrNull { gradleRioYearRegex.find(it.readText())?.groupValues?.get(1)?.toInt() }
+    ?: extractProjectYear(readWpiLibPreferenceString(projectRoot, projectYearPropertyName))
 
 /** The targets (e.g. `linuxsystemcoredebug` and `windowsx86-64debug`) that GradleRIO generated a compilation database for. */
 fun findCompileCommandsTargets(projectRoot: Path): List<String>
@@ -125,41 +167,64 @@ fun choosePrimaryTarget(targets: List<String>, selectedTarget: String?): String?
     ?: targets.firstOrNull { it.endsWith("debug") }
     ?: targets.firstOrNull()
 
+/** A compilation database merged from the projects' generated ones, and the (primary) target used for each project. */
+class MergedCompileCommands(val json: String, val primaryTargets: Map<Path, String>)
+
 /**
- * Creates the compilation database for the primary target. Since tests are only built for the desktop, the files that are not
- * in the primary target's compilation database (i.e. the tests) are added from the other targets of the same build type.
+ * Creates the compilation database of the projects, from each project's primary target. Since tests are only built for the desktop,
+ * the files that are not in the primary target's compilation database (i.e. the tests) are added from the project's other targets
+ * of the same build type. A file that is compiled by several projects (e.g. a library's sources that an example robot project also
+ * compiles) is used from the first project. Returns `null` if no compilation databases were generated.
  */
-fun mergeCompileCommands(projectRoot: Path, primaryTarget: String, targets: List<String>): String
+fun mergeCompileCommands(projectRoots: List<Path>, selectedTarget: String?): MergedCompileCommands?
 {
-    val buildType = if (primaryTarget.endsWith("release")) "release" else "debug"
-    val orderedTargets = listOf(primaryTarget) + targets.filter { it != primaryTarget && it.endsWith(buildType) }
     val files = mutableSetOf<String>()
     val merged = JsonArray()
-    orderedTargets.forEach { target ->
-        val text = projectRoot.resolve(targetedCompileCommandsDirPath).resolve(target).resolve(compileCommandsFileName).readText()
-        JsonParser.parseString(text).asJsonArray.forEach { entry ->
-            val file = entry.asJsonObject.get("file")?.asString ?: return@forEach
-            if (files.add(FileUtil.toSystemIndependentName(file).lowercase())) merged.add(entry)
+    val primaryTargets = linkedMapOf<Path, String>()
+    projectRoots.forEach { projectRoot ->
+        val targets = findCompileCommandsTargets(projectRoot)
+        val primaryTarget = choosePrimaryTarget(targets, selectedTarget) ?: return@forEach
+        primaryTargets[projectRoot] = primaryTarget
+        val buildType = if (primaryTarget.endsWith("release")) "release" else "debug"
+        val orderedTargets = listOf(primaryTarget) + targets.filter { it != primaryTarget && it.endsWith(buildType) }
+        orderedTargets.forEach { target ->
+            val text = projectRoot.resolve(targetedCompileCommandsDirPath).resolve(target).resolve(compileCommandsFileName).readText()
+            JsonParser.parseString(text).asJsonArray.forEach { entry ->
+                val file = compiledFileKey(entry.asJsonObject) ?: return@forEach
+                if (files.add(file)) merged.add(entry)
+            }
         }
     }
-    return GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(merged)
+    if (primaryTargets.isEmpty()) return null
+    return MergedCompileCommands(GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create().toJson(merged), primaryTargets)
 }
 
-/** Whether the project's compilation database is newer than the files it is generated from. */
-private fun isCompileCommandsUpToDate(projectRoot: Path): Boolean
+/** The (case-insensitive) path of the file a compilation database entry compiles, resolved against the entry's directory. */
+private fun compiledFileKey(entry: JsonObject): String?
 {
-    val compileCommands = projectRoot.resolve(compileCommandsFileName)
+    val file = entry.get("file")?.asString ?: return null
+    val directory = entry.get("directory")?.asString
+    val path = if (directory == null || FileUtil.isAbsolute(file)) file else "$directory/$file"
+    return FileUtil.toCanonicalPath(FileUtil.toSystemIndependentName(path)).lowercase()
+}
+
+/** Whether the compilation database is newer than the projects' files it is generated from. */
+private fun isCompileCommandsUpToDate(compileCommands: Path, projectRoots: List<Path>): Boolean
+{
     if (!compileCommands.isRegularFile()) return false
-    val inputs = compileCommandsInputFiles.map { projectRoot.resolve(it) } +
-                 (projectRoot.resolve(vendordepsDirName).takeIf { it.isDirectory() }?.listDirectoryEntries("*.json") ?: emptyList())
+    val inputs = projectRoots.flatMap { projectRoot ->
+        compileCommandsInputFiles.map { projectRoot.resolve(it) } +
+        (projectRoot.resolve(vendordepsDirName).takeIf { it.isDirectory() }?.listDirectoryEntries("*.json") ?: emptyList())
+    }
     val generated = compileCommands.getLastModifiedTime()
     return inputs.filter { it.isRegularFile() }.all { it.getLastModifiedTime() <= generated }
 }
 
-/** Whether the path is one of the files the compilation database is generated from. */
+/** Whether the path is one of the files the project's compilation database is generated from. */
 private fun isCompileCommandsInputPath(projectRootPath: String, path: String): Boolean
 {
     val relativePath = FileUtil.getRelativePath(projectRootPath, FileUtil.toSystemIndependentName(path), '/') ?: return false
+    if (relativePath.startsWith("..")) return false
     return relativePath in compileCommandsInputFiles || (relativePath.startsWith("$vendordepsDirName/") && relativePath.endsWith(".json"))
 }
 
@@ -178,21 +243,42 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
     private val toolchainInstallAttempted = AtomicBoolean(false)
     private val updateAlarm = Alarm(Alarm.ThreadToUse.POOLED_THREAD, this)
 
-    /** The root directory of the WPILib C++ project, or `null` if the project is not a WPILib C++ project. */
-    fun findCppProjectRoot(): Path? = project.findWpiLibProjectRootDirs().firstOrNull()?.takeIf { project.isWpiLibCppProject() }?.toNioPath()
+    /** The roots of the WPILib C++ projects, as found by [findCppProjectRoots]. Cached, as finding nested projects searches the file system. */
+    @Volatile
+    var cppProjectRoots: List<Path> = emptyList()
+        private set
+
+    /**
+     * Finds the roots of the project's WPILib C++ projects: the WPILib project in the opened directory (or a module content root) if
+     * it is a C++ project, otherwise the WPILib C++ projects in subdirectories of the opened directory. Robot projects are listed first.
+     * Updates [cppProjectRoots]. Searches the file system, so must not be called on the EDT.
+     */
+    fun findCppProjectRoots(): List<Path>
+    {
+        val wpiLibRoots = project.findWpiLibProjectRootDirs().map { it.toNioPath() }
+        val roots = if (wpiLibRoots.isNotEmpty()) wpiLibRoots.filter { isWpiLibCppProjectDir(it) }
+                    else project.guessProjectDir()?.toNioPath()?.let { findNestedCppProjectRoots(it) } ?: emptyList()
+        return roots.sortedByDescending { isRobotProjectDir(it) }.also { cppProjectRoots = it }
+    }
+
+    /** The directory the compilation database is written to: the opened directory, if it contains all the projects, otherwise the first project's root. */
+    private fun compileCommandsDir(projectRoots: List<Path>): Path =
+        project.guessProjectDir()?.toNioPath()?.takeIf { dir -> projectRoots.all { it.startsWith(dir) } } ?: projectRoots.first()
 
     /** Sets up a WPILib C++ project when it is opened. Must not be called on the EDT. */
     internal fun onProjectOpened()
     {
-        val projectRoot = findCppProjectRoot() ?: return
-        logger.info("[FRC] WPILib C++ project detected: '${project.name}'")
-        listenForInputChanges(projectRoot)
-        ApplicationManager.getApplication().invokeLater({ ensureCppRunConfigurations(project) }, ModalityState.nonModal(), project.disposed)
+        val projectRoots = findCppProjectRoots()
+        if (projectRoots.isEmpty()) return
+        logger.info("[FRC] WPILib C++ project(s) detected in project '${project.name}': $projectRoots")
+        listenForInputChanges()
+        ApplicationManager.getApplication().invokeLater({ ensureCppRunConfigurations(project, projectRoots) }, ModalityState.nonModal(), project.disposed)
         // When the robot toolchain is not installed, the compile commands are generated (to install it) even if they are up to date
-        if (isCompileCommandsUpToDate(projectRoot) && hasRobotTarget(findCompileCommandsTargets(projectRoot)))
+        if (isCompileCommandsUpToDate(compileCommandsDir(projectRoots).resolve(compileCommandsFileName), projectRoots)
+            && projectRoots.any { hasRobotTarget(findCompileCommandsTargets(it)) })
         {
             // Still (re)load it, in case it is not yet linked as the project's compilation database
-            loadCompilationDatabase(projectRoot)
+            loadCompilationDatabase(projectRoots)
         }
         else
         {
@@ -200,15 +286,18 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
         }
     }
 
-    /** Regenerates the compilation database when the Gradle build or vendordeps change, which may change the WPILib/vendor libraries. */
-    private fun listenForInputChanges(projectRoot: Path)
+    /**
+     * Regenerates the compilation database when the Gradle build or vendordeps change, which may change the WPILib/vendor libraries,
+     * or when a (nested) project's `.wpilib` directory changes, which may add or remove a project.
+     */
+    private fun listenForInputChanges()
     {
-        val projectRootPath = FileUtil.toSystemIndependentName(projectRoot.toString())
         project.messageBus.connect(this).subscribe(VirtualFileManager.VFS_CHANGES, object : BulkFileListener
         {
             override fun after(events: List<VFileEvent>)
             {
-                if (events.any { isCompileCommandsInputPath(projectRootPath, it.path) })
+                val projectRootPaths = cppProjectRoots.map { FileUtil.toSystemIndependentName(it.toString()) }
+                if (events.any { event -> isWpiLibProjectLayoutPath(event.path) || projectRootPaths.any { isCompileCommandsInputPath(it, event.path) } })
                 {
                     // Coalesces multiple changes (e.g. when several vendordeps are added at once)
                     updateAlarm.cancelAllRequests()
@@ -245,88 +334,93 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
 
     private fun generate(indicator: ProgressIndicator, userInitiated: Boolean)
     {
-        val projectRoot = findCppProjectRoot() ?: return
-        val gradlew = projectRoot.resolve(if (SystemInfo.isWindows) "gradlew.bat" else "gradlew")
-        if (!gradlew.isRegularFile())
+        val projectRoots = findCppProjectRoots()
+        if (projectRoots.isEmpty()) return
+        for (projectRoot in projectRoots)
         {
-            notifyFailure("The Gradle wrapper ($gradlew) was not found, so the compile commands could not be generated.")
-            return
+            if (runGradleTask(projectRoot, generateCompileCommandsTask, indicator) == null) return
         }
-        if (runGradleTask(projectRoot, gradlew, generateCompileCommandsTask, indicator) != true) return
         // Without the robot's toolchain, only the desktop targets are generated, so it is installed (once per session, unless the user
         // requested the update) and the compile commands regenerated, so the code is analyzed as it is compiled for the robot
-        if (!hasRobotTarget(findCompileCommandsTargets(projectRoot)) && (toolchainInstallAttempted.compareAndSet(false, true) || userInitiated))
+        if (projectRoots.none { hasRobotTarget(findCompileCommandsTargets(it)) } && (toolchainInstallAttempted.compareAndSet(false, true) || userInitiated))
         {
-            val installTask = robotToolchainInstallTask(project.getConfiguredProjectYearJustYear())
-            logger.info("[FRC] The robot toolchain of project '${project.name}' is not installed. Installing it with the '$installTask' Gradle task.")
-            when (runGradleTask(projectRoot, gradlew, installTask, indicator))
+            val projectRoot = projectRoots.first()
+            val installTask = robotToolchainInstallTask(findProjectYear(projectRoot))
+            logger.info("[FRC] The robot toolchain of project '${project.name}' is not installed. Installing it with the '$installTask' Gradle task in $projectRoot.")
+            when (runGradleTask(projectRoot, installTask, indicator))
             {
-                true  -> if (runGradleTask(projectRoot, gradlew, generateCompileCommandsTask, indicator) != true) return
+                true  -> for (root in projectRoots) { if (runGradleTask(root, generateCompileCommandsTask, indicator) == null) return }
                 false -> Unit // The failure was reported; the desktop target's compile commands are still used
                 null  -> return
             }
         }
-        loadCompilationDatabase(projectRoot, userInitiated)
+        loadCompilationDatabase(projectRoots, userInitiated)
     }
 
     /**
-     * Runs a Gradle task of the project, with the WPILib JDK (as when building the robot code), reporting a failure to the user.
+     * Runs a Gradle task of the (WPILib) project, with the WPILib JDK (as when building the robot code), reporting a failure to the user.
      * @return whether the task succeeded, or `null` if it was cancelled
      */
-    private fun runGradleTask(projectRoot: Path, gradlew: Path, task: String, indicator: ProgressIndicator): Boolean?
+    private fun runGradleTask(projectRoot: Path, task: String, indicator: ProgressIndicator): Boolean?
     {
-        indicator.text = "Running the '$task' Gradle task"
+        val gradlew = projectRoot.resolve(if (SystemInfo.isWindows) "gradlew.bat" else "gradlew")
+        if (!gradlew.isRegularFile())
+        {
+            notifyFailure("The Gradle wrapper ($gradlew) was not found, so the compile commands could not be generated.")
+            return false
+        }
+        indicator.text = "Running the '$task' Gradle task" + if (cppProjectRoots.size > 1) " of ${projectRoot.name}" else ""
         val executable = if (SystemInfo.isWindows || Files.isExecutable(gradlew)) listOf(gradlew.toString()) else listOf("/bin/sh", gradlew.toString())
         val commandLine = GeneralCommandLine(executable + task + toolchainOptionalArguments + "--console=plain")
             .withWorkingDirectory(projectRoot)
             .withParentEnvironmentType(GeneralCommandLine.ParentEnvironmentType.CONSOLE)
         project.findWpiLibJdkHome()?.let { commandLine.withEnvironment("JAVA_HOME", it.toString()) }
-        logger.info("[FRC] Running the '$task' Gradle task of project '${project.name}': ${commandLine.commandLineString}")
+        logger.info("[FRC] Running the '$task' Gradle task of project '${project.name}' in $projectRoot: ${commandLine.commandLineString}")
         val output = CapturingProcessHandler(commandLine).runProcessWithProgressIndicator(indicator)
         if (output.isCancelled) return null
         if (output.exitCode != 0)
         {
-            logger.warn("[FRC] The '$task' Gradle task failed (exit code ${output.exitCode}):\n${output.stdout}\n${output.stderr}")
+            logger.warn("[FRC] The '$task' Gradle task failed in $projectRoot (exit code ${output.exitCode}):\n${output.stdout}\n${output.stderr}")
             val details = (output.stderr.ifBlank { output.stdout }).lines().filter { it.isNotBlank() }.takeLast(8).joinToString("<br/>")
-            notifyFailure("The '$task' Gradle task failed, so the C++ code insight may be incomplete.<br/><br/><tt>$details</tt>")
+            notifyFailure("The '$task' Gradle task failed in <tt>${projectRoot.name}</tt>, so the C++ code insight may be incomplete.<br/><br/><tt>$details</tt>")
             return false
         }
         return true
     }
 
-    /** Writes the (primary target's) compilation database to the project root, if it changed, and loads it. */
-    private fun loadCompilationDatabase(projectRoot: Path, userInitiated: Boolean = false)
+    /** Writes the (primary targets') compilation database, if it changed, and loads it. */
+    private fun loadCompilationDatabase(projectRoots: List<Path>, userInitiated: Boolean = false)
     {
-        val targets = findCompileCommandsTargets(projectRoot)
-        val primaryTarget = choosePrimaryTarget(targets, PropertiesComponent.getInstance(project).getValue(selectedTargetKey))
-        if (primaryTarget == null)
+        val merged = mergeCompileCommands(projectRoots, PropertiesComponent.getInstance(project).getValue(selectedTargetKey))
+        if (merged == null)
         {
             notifyFailure("GradleRIO did not generate any compile commands (in $targetedCompileCommandsDirPath). Is a C++ toolchain installed?")
             return
         }
-        val compileCommands = projectRoot.resolve(compileCommandsFileName)
-        val content = mergeCompileCommands(projectRoot, primaryTarget, targets)
-        if (!compileCommands.isRegularFile() || compileCommands.readText() != content)
+        val compileCommands = compileCommandsDir(projectRoots).resolve(compileCommandsFileName)
+        if (!compileCommands.isRegularFile() || compileCommands.readText() != merged.json)
         {
-            compileCommands.writeText(content)
+            compileCommands.writeText(merged.json)
         }
-        logger.info("[FRC] Using the '$primaryTarget' C++ compile commands for project '${project.name}' (available: $targets)")
+        merged.primaryTargets.forEach { (projectRoot, target) ->
+            logger.info("[FRC] Using the '$target' C++ compile commands of $projectRoot for project '${project.name}' (available: ${findCompileCommandsTargets(projectRoot)})")
+        }
         val compileCommandsFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(compileCommands) ?: return
         ApplicationManager.getApplication().invokeLater({ CLionCompilationDatabase.linkOrReload(project, compileCommandsFile) }, ModalityState.nonModal(), project.disposed)
         if (userInitiated)
         {
+            val targets = merged.primaryTargets.values.distinct().joinToString("', '")
             FrcNotifyType.GENERAL_INFO.builder()
-                .withContent("The C++ code insight now uses the '$primaryTarget' target's compile commands.")
+                .withContent("The C++ code insight now uses the '$targets' target's compile commands.")
                 .withFrcPrefixedTitle("C++ compile commands updated")
                 .notify(project)
         }
     }
 
-    /** The targets that can be selected, and the one in use. */
+    /** The targets that can be selected, and the one in use. Must not be called on the EDT. */
     fun getTargets(): Pair<List<String>, String?>
     {
-        val projectRoot = findCppProjectRoot() ?: return emptyList<String>() to null
-        val targets = findCompileCommandsTargets(projectRoot)
+        val targets = findCppProjectRoots().flatMap { findCompileCommandsTargets(it) }.distinct().sorted()
         return targets to choosePrimaryTarget(targets, PropertiesComponent.getInstance(project).getValue(selectedTargetKey))
     }
 
@@ -334,8 +428,10 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
     fun selectTarget(target: String)
     {
         PropertiesComponent.getInstance(project).setValue(selectedTargetKey, target)
-        val projectRoot = findCppProjectRoot() ?: return
-        ApplicationManager.getApplication().executeOnPooledThread { loadCompilationDatabase(projectRoot, userInitiated = true) }
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val projectRoots = findCppProjectRoots()
+            if (projectRoots.isNotEmpty()) loadCompilationDatabase(projectRoots, userInitiated = true)
+        }
     }
 
     private fun notifyFailure(content: String)
@@ -353,34 +449,38 @@ class WpiLibCppCompilationDatabaseService(private val project: Project) : Dispos
 
 /**
  * Creates Gradle run configurations to build, deploy, and simulate the C++ robot code. (In IntelliJ IDEA, i.e. when the Java
- * plugin is available, the run configurations are created along with the other FRC run configurations.)
+ * plugin is available, the run configurations are created along with the other FRC run configurations.) When there are several
+ * robot projects, each one's run configurations are suffixed with its directory name.
  */
-private fun ensureCppRunConfigurations(project: Project)
+private fun ensureCppRunConfigurations(project: Project, projectRoots: List<Path>)
 {
     if (project.isDisposed || isJavaPluginAvailable) return
-    val projectPath = project.basePath ?: return
+    val robotRoots = if (projectRoots.size == 1) projectRoots else projectRoots.filter { isRobotProjectDir(it) }
     val runManager = RunManager.getInstance(project)
-    listOf("Build Robot Code" to listOf("build"),
-           "Deploy Robot Code" to listOf("deploy"),
-           "Simulate Robot Code" to listOf("simulateNative"))
-        .filter { (name, _) -> runManager.findConfigurationByName(name) == null }
-        .forEach { (name, tasks) ->
-            try
-            {
-                val settings = runManager.createConfiguration(name, GradleExternalTaskConfigurationType.getInstance().configurationFactories[0])
-                (settings.configuration as GradleRunConfiguration).settings.apply {
-                    externalProjectPath = projectPath
-                    taskNames = tasks
+    robotRoots.forEach { projectRoot ->
+        val suffix = if (robotRoots.size > 1) " (${projectRoot.name})" else ""
+        listOf("Build Robot Code$suffix" to listOf("build"),
+               "Deploy Robot Code$suffix" to listOf("deploy"),
+               "Simulate Robot Code$suffix" to listOf("simulateNative"))
+            .filter { (name, _) -> runManager.findConfigurationByName(name) == null }
+            .forEach { (name, tasks) ->
+                try
+                {
+                    val settings = runManager.createConfiguration(name, GradleExternalTaskConfigurationType.getInstance().configurationFactories[0])
+                    (settings.configuration as GradleRunConfiguration).settings.apply {
+                        externalProjectPath = FileUtil.toSystemIndependentName(projectRoot.toString())
+                        taskNames = tasks
+                    }
+                    runManager.addConfiguration(settings)
+                    if (runManager.selectedConfiguration == null) runManager.selectedConfiguration = settings
+                    logger.info("[FRC] Created the '$name' run configuration for project '${project.name}'")
                 }
-                runManager.addConfiguration(settings)
-                if (runManager.selectedConfiguration == null) runManager.selectedConfiguration = settings
-                logger.info("[FRC] Created the '$name' run configuration for project '${project.name}'")
+                catch (e: Exception)
+                {
+                    logger.warn("[FRC] Could not create the '$name' run configuration for project '${project.name}': $e", e)
+                }
             }
-            catch (e: Exception)
-            {
-                logger.warn("[FRC] Could not create the '$name' run configuration for project '${project.name}': $e", e)
-            }
-        }
+    }
 }
 
 class WpiLibCppCompilationDatabaseStartupActivity : ProjectActivity

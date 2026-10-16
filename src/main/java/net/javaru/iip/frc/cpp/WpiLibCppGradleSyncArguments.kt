@@ -42,18 +42,22 @@ class WpiLibCppGradleSyncArgumentsResolverExtension : AbstractProjectResolverExt
 private val logger = logger<WpiLibCppGradleSyncArgumentsResolverExtension>()
 
 /** Whether the directory is the root of a WPILib C++ project, i.e. its `.wpilib/wpilib_preferences.json` file's `currentLanguage` is `cpp`. */
-internal fun isWpiLibCppProjectDir(projectDir: Path): Boolean
+internal fun isWpiLibCppProjectDir(projectDir: Path): Boolean =
+    readWpiLibPreferenceString(projectDir, "currentLanguage").equals("cpp", ignoreCase = true)
+
+/** Reads a (string) property of the directory's `.wpilib/wpilib_preferences.json` file, or `null` if there is no such file or property. */
+internal fun readWpiLibPreferenceString(projectDir: Path, propertyName: String): String?
 {
     val preferencesFile = projectDir.resolve(wpiLibDirName).resolve(wpiLibPreferencesFileName)
-    if (!preferencesFile.isRegularFile()) return false
+    if (!preferencesFile.isRegularFile()) return null
     return try
     {
         val preferences = JsonParser.parseString(preferencesFile.readText()).asJsonObject
-        preferences.get("currentLanguage")?.asString?.trim().equals("cpp", ignoreCase = true)
+        preferences.get(propertyName)?.takeIf { it.isJsonPrimitive }?.asString?.trim()
     }
     catch (e: Exception)
     {
         logger.info("[FRC] Could not read $preferencesFile. Cause: $e")
-        false
+        null
     }
 }
