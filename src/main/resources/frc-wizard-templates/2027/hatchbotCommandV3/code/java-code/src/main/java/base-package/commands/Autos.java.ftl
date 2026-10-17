@@ -1,0 +1,54 @@
+<#ftl output_format="plainText" encoding="UTF-8">
+<#--noinspection WrongPackageStatement-->
+<#compress>
+<#-- @ftlvariable name="data" type="net.javaru.iip.frc.wizard.FrcProjectWizardData" -->
+<#--
+    Template Language Reference: https://freemarker.apache.org/docs/ref.html
+    Template Author's Guide:     https://freemarker.apache.org/docs/dgui.html
+-->
+<#--  To DEBUG templates, set system property 'frc.freemarker.debug' to true when launching the testing instance of IntelliJ IDEA -->
+</#compress>
+${data.copyright}
+
+package ${data.basePackage}.commands;
+
+import org.wpilib.command3.Command;
+import ${data.basePackage}.Constants.AutoConstants;
+import ${data.basePackage}.mechanisms.DriveMechanism;
+import ${data.basePackage}.mechanisms.HatchMechanism;
+
+/** Container for auto command factories. */
+public final class Autos {
+  /** A simple auto routine that drives forward a specified distance and then stops. */
+  public static Command simpleAuto(DriveMechanism drive) {
+    return drive.driveDistance(
+        AutoConstants.AUTO_DRIVE_DISTANCE_INCHES, AutoConstants.AUTO_DRIVE_SPEED);
+  }
+
+  /** A complex auto routine that drives forward, drops a hatch, and then drives backward. */
+  public static Command complexAuto(DriveMechanism driveMechanism, HatchMechanism hatchMechanism) {
+    // NOTE: requirement behavior.
+    // To require each mechanism for while it's active, replace `requiring` with `noRequirements`.
+    return Command.requiring(driveMechanism, hatchMechanism)
+        .executing(
+            coro -> {
+              // Drive forward up to the front of the cargo ship
+              coro.await(
+                  driveMechanism.driveDistance(
+                      AutoConstants.AUTO_DRIVE_DISTANCE_INCHES, AutoConstants.AUTO_DRIVE_SPEED));
+
+              // Release the hatch
+              coro.await(hatchMechanism.releaseHatchCommand());
+
+              // Drive backward the specified distance
+              coro.await(
+                  driveMechanism.driveDistance(
+                      AutoConstants.AUTO_BACKUP_DISTANCE_INCHES, AutoConstants.AUTO_DRIVE_SPEED));
+            })
+        .named("Complex Auto");
+  }
+
+  private Autos() {
+    throw new UnsupportedOperationException("This is a utility class!");
+  }
+}

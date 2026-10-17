@@ -630,4 +630,22 @@ internal class WpiLibVersionFiltersKtTest
 //                 )
 //    }
 
+    @Test
+    fun filterToDefaultListingIncludesTheLatestPreReleaseOfAnUnreleasedSeason()
+    {
+        System.setProperty(SHOW_BETAS_SYS_PROP_KEY, "false")
+        val v2026_1_1 = WpiLibVersionImpl.parse("2026.1.1")
+        val v2026_2_1 = WpiLibVersionImpl.parse("2026.2.1")
+        val v2027_alpha_6 = WpiLibVersionImpl.parse("2027.0.0-alpha-6")
+        val v2027_alpha_7 = WpiLibVersionImpl.parse("2027.0.0-alpha-7")
+        val v2027_1_1 = WpiLibVersionImpl.parse("2027.1.1")
+        assertAll(
+            // Before 2027 is released, its latest alpha is listed so that 2027 projects can be created
+            { assertEquals(listOf(v2027_alpha_7, v2026_2_1, v2026_1_1),
+                           listOf(v2026_1_1, v2026_2_1, v2027_alpha_6, v2027_alpha_7).filterToDefaultListing(), "Before the 2027 release") },
+            // Once 2027 is released, its pre-releases are no longer listed
+            { assertEquals(listOf(v2027_1_1, v2026_2_1),
+                           listOf(v2026_1_1, v2026_2_1, v2027_alpha_7, v2027_1_1).filterToDefaultListing(), "After the 2027 release") },
+                 )
+    }
 }

@@ -20,10 +20,13 @@ import net.javaru.iip.frc.assertPathsEqual
 import net.javaru.iip.frc.setInTestModeSystemProperty
 import net.javaru.iip.frc.wpilib.version.WpiLibVersionImpl
 import org.apache.commons.lang3.SystemUtils
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assumptions.*
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertAll
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
 import java.nio.file.Paths
 
 
@@ -75,4 +78,16 @@ internal class WpiLibHelpersKtTest
     //            { assertEquals(11, getWpiLibJdkReleaseJavaFeatureVersion(2019)) }
     //             )
     //}
+
+    @ParameterizedTest
+    @CsvSource(
+        "2026.2.1, 2026",
+        "2027.0.0-alpha-7, 2027_alpha7",
+        "2027.1.1, 2027",
+                                                 )
+    fun determinesTheProjectYearForTheWpiLibVersion(version: String, expected: String)
+    {
+        // From 2027 on, the project year is the WPILib installer's, which settings.gradle and the vendordeps' wpilibYear use
+        assertEquals(expected, determineProjectYearStringForVersion(WpiLibVersionImpl.parse(version)))
+    }
 }

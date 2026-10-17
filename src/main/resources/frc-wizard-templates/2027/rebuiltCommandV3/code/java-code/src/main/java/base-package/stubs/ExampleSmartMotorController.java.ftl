@@ -1,0 +1,105 @@
+<#ftl output_format="plainText" encoding="UTF-8">
+<#--noinspection WrongPackageStatement-->
+<#compress>
+<#-- @ftlvariable name="data" type="net.javaru.iip.frc.wizard.FrcProjectWizardData" -->
+<#--
+    Template Language Reference: https://freemarker.apache.org/docs/ref.html
+    Template Author's Guide:     https://freemarker.apache.org/docs/dgui.html
+-->
+<#--  To DEBUG templates, set system property 'frc.freemarker.debug' to true when launching the testing instance of IntelliJ IDEA -->
+</#compress>
+${data.copyright}
+
+package ${data.basePackage}.stubs;
+
+/**
+ * A simplified stub class that simulates the API of a common "smart" motor controller.
+ *
+ * <p>Has no actual functionality.
+ */
+public class ExampleSmartMotorController {
+  public enum PIDMode {
+    POSITION,
+    VELOCITY,
+    MOVEMENT_WITCHCRAFT
+  }
+
+  double value;
+
+  /**
+   * Creates a new ExampleSmartMotorController.
+   *
+   * @param port The port for the controller.
+   */
+  public ExampleSmartMotorController(int port) {}
+
+  /**
+   * Example method for setting the PID gains of the smart controller.
+   *
+   * @param kp The proportional gain.
+   * @param ki The integral gain.
+   * @param kd The derivative gain.
+   */
+  public void setPID(double kp, double ki, double kd) {}
+
+  /**
+   * Example method for setting the setpoint of the smart controller in PID mode.
+   *
+   * @param mode The mode of the PID controller.
+   * @param setpoint The controller setpoint.
+   */
+  public void setSetpoint(PIDMode mode, double setpoint) {}
+
+  /**
+   * Example method for setting the voltage supplied to the motor.
+   *
+   * @param volts How many volts to apply to the motor.
+   */
+  public void setVoltage(int volts) {}
+
+  /**
+   * Places this motor controller in follower mode.
+   *
+   * @param leader The leader to follow.
+   */
+  public void follow(ExampleSmartMotorController leader) {}
+
+  /**
+   * Returns the encoder distance.
+   *
+   * @return The current encoder distance.
+   */
+  public double getEncoderDistance() {
+    return 0;
+  }
+
+  /**
+   * Returns the encoder rate.
+   *
+   * @return The current encoder rate.
+   */
+  public double getEncoderRate() {
+    return 0;
+  }
+
+  /** Resets the encoder to zero distance. */
+  public void resetEncoder() {}
+
+  public void setThrottle(double throttle) {
+    value = throttle;
+  }
+
+  public double getThrottle() {
+    return value;
+  }
+
+  public void setInverted(boolean isInverted) {}
+
+  public boolean getInverted() {
+    return false;
+  }
+
+  public void disable() {}
+
+  public void stopMotor() {}
+}

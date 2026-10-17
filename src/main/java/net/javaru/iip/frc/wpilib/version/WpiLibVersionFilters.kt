@@ -144,7 +144,20 @@ fun Iterable<WpiLibVersion>.filterToDefaultListing(): List<WpiLibVersion>
         logger.trace { "List after filtering for $it : $filteredList" }
     }
 
-    return addRcBackIfItIsTheLatest(versionList, filteredList)
+    return addLatestPreReleaseOfAnUnreleasedSeason(versionList, addRcBackIfItIsTheLatest(versionList, filteredList))
+}
+
+/**
+ * Adds the latest pre-release (alpha, beta or RC) of the newest season when that season has no full release yet, such as
+ * `2027.0.0-alpha-7` before 2027 is released, so that projects for the coming season can be created. The wizard still
+ * selects the newest full release by default.
+ */
+private fun addLatestPreReleaseOfAnUnreleasedSeason(fullVersionList: List<WpiLibVersion>, filteredList: List<WpiLibVersion>): List<WpiLibVersion>
+{
+    val newestSeason = fullVersionList.maxOfOrNull { it.frcYear } ?: return filteredList
+    if (fullVersionList.any { it.frcYear == newestSeason && it.isRelease() }) return filteredList
+    val latestPreRelease = fullVersionList.filter { it.frcYear == newestSeason && it.isPreRelease() }.maxOrNull() ?: return filteredList
+    return if (filteredList.contains(latestPreRelease)) filteredList else (filteredList + latestPreRelease).sortedDescending()
 }
 
 private fun isTeam3838AndInAllowableTimeWindow(): Boolean

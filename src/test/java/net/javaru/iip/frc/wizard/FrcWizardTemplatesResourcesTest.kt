@@ -33,7 +33,7 @@ internal class FrcWizardTemplatesResourcesTest
     private fun resourceExists(path: String) = javaClass.classLoader.getResource(path) != null
 
     @ParameterizedTest
-    @ValueSource(ints = [2025, 2026])
+    @ValueSource(ints = [2025, 2026, 2027])
     fun `every template definition for the year has a resources directory`(year: Int)
     {
         // Note: these functions return enum arrays cast to Array<FrcWizardTemplateDefinition>, so concatenate as lists
@@ -57,5 +57,31 @@ internal class FrcWizardTemplatesResourcesTest
         assertNotNull(text, "Missing resource: $path")
         val frcYear = """"frcYear"\s*:\s*"?(\d{4})"?""".toRegex().find(text!!)?.groupValues?.get(1)
         assertEquals(year.toString(), frcYear, "frcYear in $path")
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["CommandsV2.json.ftl", "CommandsV3.json.ftl", "XRPVendordep.json.ftl", "RomiVendordep.json.ftl"])
+    fun `2027 vendordeps take their wpilibYear from the project year`(fileName: String)
+    {
+        // From 2027 on, vendordeps declare the WPILib project year (e.g. "2027_alpha7") as wpilibYear, in place of frcYear
+        val path = "frc-wizard-templates/2027/-DEFAULT-FILES-/configs/vendordeps/$fileName"
+        val text = javaClass.classLoader.getResource(path)?.readText()
+        assertNotNull(text, "Missing resource: $path")
+        assertTrue(text!!.contains(""""wpilibYear": "${'$'}{data.projectYear}""""), "wpilibYear in $path")
+        assertTrue(!text.contains("frcYear"), "frcYear in $path")
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [2025, 2026, 2027])
+    fun `every template's resources directory has code for each of its languages`(year: Int)
+    {
+        val definitions = projectTemplateDefinitionsFor(year).toList() + exampleTemplateDefinitionsFor(year).toList()
+        val missing = definitions.flatMap { definition ->
+            definition.availableTemplateLanguages.map { language ->
+                val code = if (language == TemplateLanguageOption.Java) "java-code" else "kotlin-code"
+                "frc-wizard-templates/$year/${definition.templateResourcesDirName()}/code/$code"
+            }
+        }.filterNot { resourceExists(it) }
+        assertEquals(emptyList<String>(), missing, "Template languages without code")
     }
 }

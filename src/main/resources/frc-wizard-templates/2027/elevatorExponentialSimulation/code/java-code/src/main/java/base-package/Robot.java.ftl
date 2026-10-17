@@ -1,0 +1,67 @@
+<#ftl output_format="plainText" encoding="UTF-8">
+<#--noinspection WrongPackageStatement-->
+<#compress>
+<#-- @ftlvariable name="data" type="net.javaru.iip.frc.wizard.FrcProjectWizardData" -->
+<#--
+    Template Language Reference: https://freemarker.apache.org/docs/ref.html
+    Template Author's Guide:     https://freemarker.apache.org/docs/dgui.html
+-->
+<#--  To DEBUG templates, set system property 'frc.freemarker.debug' to true when launching the testing instance of IntelliJ IDEA -->
+</#compress>
+${data.copyright}
+
+package ${data.basePackage};
+
+import org.wpilib.driverstation.Joystick;
+import ${data.basePackage}.subsystems.Elevator;
+import org.wpilib.framework.TimedRobot;
+
+/** This is a sample program to demonstrate the use of elevator simulation. */
+public class ${data.robotClassSimpleName} extends TimedRobot {
+  private final Joystick joystick = new Joystick(Constants.JOYSTICK_PORT);
+  private final Elevator elevator = new Elevator();
+
+  public Robot() {
+    super(0.020);
+  }
+
+  @Override
+  public void robotPeriodic() {
+    // Update the telemetry, including mechanism visualization, regardless of mode.
+    elevator.updateTelemetry();
+  }
+
+  @Override
+  public void simulationPeriodic() {
+    // Update the simulation model.
+    elevator.simulationPeriodic();
+  }
+
+  @Override
+  public void teleopInit() {
+    elevator.reset();
+  }
+
+  @Override
+  public void teleopPeriodic() {
+    if (joystick.getTrigger()) {
+      // Here, we set the constant setpoint of 10 meters.
+      elevator.reachGoal(Constants.SETPOINT);
+    } else {
+      // Otherwise, we update the setpoint to 1 meter.
+      elevator.reachGoal(Constants.LOWERK_SETPOINT);
+    }
+  }
+
+  @Override
+  public void disabledInit() {
+    // This just makes sure that our simulation code knows that the motor's off.
+    elevator.stop();
+  }
+
+  @Override
+  public void close() {
+    elevator.close();
+    super.close();
+  }
+}

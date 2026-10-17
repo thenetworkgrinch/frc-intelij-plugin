@@ -51,7 +51,14 @@ private val logger = logger<WpiLibHelpers>()
  * is a hard coded value in [https://github.com/wpilibsuite/vscode-wpilib/blob/master/vscode-wpilib/resources/gradle/java/.wpilib/wpilib_preferences.json]
  * and the change from `Beta2020` to `Beta2020-2` did not correlate to a WpiLib version/release.
  */
-fun determineProjectYearStringForVersion(version: WpiLibVersion): String = if (version.isNewerThan(minVersion(2020)) && version.isOlderThan(firstRelease(2020)) && version.isBetaOrBetaPreview()) "Beta2020-2" else version.frcYear.toString()
+fun determineProjectYearStringForVersion(version: WpiLibVersion): String = when
+{
+    version.isNewerThan(minVersion(2020)) && version.isOlderThan(firstRelease(2020)) && version.isBetaOrBetaPreview() -> "Beta2020-2"
+    // From 2027 on, the project year is the WPILib installer's, such as `2027_alpha7` for `2027.0.0-alpha-7`, which settings.gradle
+    // uses to find the installed WPILib, and which the vendordeps' `wpilibYear` must match.
+    version.frcYear >= 2027 -> net.javaru.iip.frc.wpilib.vendordeps.vendorRepoBundleName(version.versionString) ?: version.frcYear.toString()
+    else -> version.frcYear.toString()
+}
 
 
 //        JAVA_VERSION key in 

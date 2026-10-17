@@ -46,6 +46,9 @@ val logger = logger<MavenMetadata>()
 
 val wpiLibGradlePluginMavenMetadataURI = URI("https://plugins.gradle.org/m2/edu/wpi/first/GradleRIO/edu.wpi.first.GradleRIO.gradle.plugin/maven-metadata.xml")
 
+/** From 2027 on, GradleRIO is published as `org.wpilib.GradleRIO`. */
+val wpiLibGradlePluginMavenMetadataURI2027 = URI("https://plugins.gradle.org/m2/org/wpilib/GradleRIO/org.wpilib.GradleRIO.gradle.plugin/maven-metadata.xml")
+
 /**
  * A `PersistentStateComponent` that stores the last retrieved `maven-metadata.xml` information for the GradleRIO plugin.
  * It stores a `MavenMetadata` instance as JSON (since  the persistent API does not store complex objects without additional
@@ -333,13 +336,40 @@ fun fetchGradleRioMavenMetadata(): WpiLibMavenMetadata?
     {
 
         val mavenMetadata = fetchLatestMavenMetadata(wpiLibGradlePluginMavenMetadataURI)
-        if (mavenMetadata == null) null else WpiLibMavenMetadata(mavenMetadata)
+        val mavenMetadata2027 = fetchLatestMavenMetadata(wpiLibGradlePluginMavenMetadataURI2027)
+        when
+        {
+            mavenMetadata == null -> null
+            mavenMetadata2027 == null -> WpiLibMavenMetadata(mavenMetadata)
+            else -> WpiLibMavenMetadata(mergeMavenMetadata(mavenMetadata, mavenMetadata2027))
+        }
     }
     catch (e: Exception)
     {
         logger.warn("[FRC] Could not convert mavenMetadata to WpiLibMavenMetadata due to an exception: $e", e)
         null
     }
+}
+
+/**
+ * Merges the GradleRIO plugin's metadata from before 2027 (`edu.wpi.first.GradleRIO`) with its metadata from 2027 on
+ * (`org.wpilib.GradleRIO`): all the versions of both, and the newer of their latest and release versions.
+ */
+fun mergeMavenMetadata(legacy: MavenMetadata, current: MavenMetadata): MavenMetadata
+{
+    fun newer(a: String, b: String): String = try
+    {
+        if (WpiLibVersionImpl.parse(b) > WpiLibVersionImpl.parse(a)) b else a
+    }
+    catch (_: Exception)
+    {
+        a
+    }
+    return legacy.copy(version = newer(legacy.version, current.version),
+                       latest = newer(legacy.latest, current.latest),
+                       release = newer(legacy.release, current.release),
+                       versions = (legacy.versions + current.versions).distinct(),
+                       lastUpdated = maxOf(legacy.lastUpdated, current.lastUpdated))
 }
 
 fun fetchLatestMavenMetadata(metadataURI: URI): MavenMetadata?

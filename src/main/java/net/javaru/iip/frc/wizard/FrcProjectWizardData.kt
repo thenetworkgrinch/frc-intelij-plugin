@@ -109,6 +109,21 @@ class FrcProjectWizardData(
     val isRoboRioRobotTemplate
         get() = frcWizardTemplateDefinition.robotType == RobotType.roboRIO
 
+    /** A competition robot from 2027 on, which is deployed to the SystemCore. */
+    val isSystemCoreRobotTemplate
+        get() = frcWizardTemplateDefinition.robotType == RobotType.SystemCore
+
+    /**
+     * The Kotlin Gradle plugin version for the generated project: [kotlinVersion], but at least the first
+     * version that can target the year's Java version (Java 25 from 2027 on, which Kotlin supports from 2.3.0).
+     */
+    val kotlinPluginVersion: String
+        get()
+        {
+            val minimum = if (frcYear >= 2027) KotlinVersion(2, 3, 0) else null
+            return (if (minimum != null && kotlinVersion < minimum) minimum else kotlinVersion).toString()
+        }
+
     val robotType: RobotType
         get() = frcWizardTemplateDefinition.robotType
 
@@ -141,7 +156,8 @@ class FrcProjectWizardData(
                 2024 -> """https\://services.gradle.org/distributions/gradle-8.5-bin.zip"""
                 2025 -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
                 2026 -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
-                else -> """https\://services.gradle.org/distributions/gradle-8.11-bin.zip"""
+                2027 -> """https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"""
+                else -> """https\://services.gradle.org/distributions/gradle-9.4.1-bin.zip"""
             }
             return if (useGradleAllDistribution || FrcApplicationSettings.getInstance().isTeam3838() || teamNumber == 3838)
                 retval.replace("-bin", "-all")
