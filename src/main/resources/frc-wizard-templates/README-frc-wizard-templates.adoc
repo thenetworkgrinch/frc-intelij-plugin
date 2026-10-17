@@ -262,6 +262,37 @@ TODO: Write up info on installing *Hungarian Notation Cleanup* Plugin
 
 Since there are no "official" Kotlin templates, we generally need to just see what has changed in the Java templates and apply them to the Kotlin templates. This can be done by doing a diff between the previous year's and the current year's Java templates, and/or by looking at the commit history on the templates in the `allwpilib` project.
 
+== 2027 and later (SystemCore)
+
+WPILib 2027 changed enough that the 2027 templates were made from the WPILib 2027 alpha 7 sources rather than by copying the 2026 templates:
+
+* *GradleRIO* is published as `org.wpilib.GradleRIO` (not `edu.wpi.first.GradleRIO`). `fetchGradleRioMavenMetadata` merges the version
+  listings of both plugin ids, and the build templates use `org.wpilib.GradleRIO`, Java 25, the `application` plugin, and a `SystemCore` deploy
+  target (`RobotType.SystemCore`, `data.isSystemCoreRobotTemplate()`).
+* *Project year:* the WPILib installer's year for an alpha is e.g. `2027_alpha7`, not `2027`. `determineProjectYearStringForVersion` returns it
+  from 2027 on, and it is used for `projectYear` in `wpilib_preferences.json`, `wpilibYear` in `settings.gradle` (to find the installed
+  WPILib's maven), and `wpilibYear` in the vendordeps.
+* *Vendordeps* declare `wpilibYear` (e.g. `"${data.projectYear}"`) in place of `frcYear`. Every project gets `CommandsV2.json` or
+  `CommandsV3.json` (which conflict with each other) according to the template's `commandVersion` (2 or 3), plus `RomiVendordep.json` or
+  `XRPVendordep.json` for Romi and XRP templates.
+* *Java 25:* the wizard requires a JDK 25 project SDK, and Kotlin projects use at least Kotlin 2.3.0 (`data.kotlinPluginVersion`), the first
+  release that can target Java 25.
+* *Annotation processing with Kotlin:* when the project includes Kotlin, the build files apply `kapt` and declare WPILib's annotation
+  processors (`wpi.java.deps.wpilibAnnotations()`, e.g. Epilogue's) as `kapt` dependencies in place of `annotationProcessor`, since kapt
+  processes both the Kotlin and the Java sources. In Kotlin templates that use Epilogue, note that a Kotlin `object` (such as the robot)
+  keeps its properties in static fields, which Epilogue does not log, so what the Java version logs from the robot is exposed through
+  public getters annotated with `@get:Logged`.
+* *Versions listed:* `filterToDefaultListing` also lists the latest pre-release (alpha, beta or RC) of the newest season while that season has
+  no full release, so that projects for the coming season can be created. The newest full release is still selected by default.
+* *Templates:* the official templates and examples are in the WPILib VS Code extension
+  (`vscode-wpilib-<version>.vsix`, under `extension/resources/java/src/{templates,examples,examples_test}` with `templates.json` and
+  `examples.json`, and the Gradle files under `extension/resources/gradle`). The Java templates were converted with the same rules as
+  `TemplatesPrepTool` (the plugin's header, the template's own `org.wpilib.templates.<name>` or `org.wpilib.examples.<name>` package replaced
+  with `${data.basePackage}`, the `Robot` class declaration using `${data.robotClassSimpleName}`, and the same comment rewordings), and keep
+  WPILib's formatting. Project templates report Kotlin use with `HAL.reportUsage("Language", "Kotlin")` when Kotlin support is included.
+  The Kotlin templates (for every 2027 project template and example) are translations of the Java ones.
+* The XRP Timed example's directory is `xrpTimedExample`, since XRP Timed is also a project template.
+
 == Update IntelliJ IDEA "Template Data Languages" settings
 See the "IntelliJ IDEA Project Template Data Language" section above on important information on how to configure IntelliJ IDEA's "Template Data Languages" to make editing the Freemarker files easier, and to prevent false warnings.
 

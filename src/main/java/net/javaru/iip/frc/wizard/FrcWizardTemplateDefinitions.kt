@@ -127,6 +127,8 @@ enum class TemplateLanguageOption
 enum class RobotType(val includeDesktopSupportDefault: Boolean)
 {
     roboRIO(false),
+    /** A competition robot from 2027 on, which runs on the SystemCore. */
+    SystemCore(false),
     Romi(true),
     XRP(true),
     ;
@@ -146,7 +148,8 @@ fun projectTemplateDefinitionsFor(year: Int): Array<FrcWizardTemplateDefinition>
         2024 -> FrcWizard2024ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2025 -> FrcWizard2025ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2026 -> FrcWizard2026ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
-        else -> FrcWizard2026ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        2027 -> FrcWizard2027ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        else -> FrcWizard2027ProjectTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
     }
 }
 fun exampleTemplateDefinitionsFor(version: WpiLibVersion): Array<FrcWizardTemplateDefinition> = exampleTemplateDefinitionsFor(version.frcYear)
@@ -163,7 +166,8 @@ fun exampleTemplateDefinitionsFor(year:Int): Array<FrcWizardTemplateDefinition>
         2024 -> FrcWizard2024ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2025 -> FrcWizard2025ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
         2026 -> FrcWizard2026ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
-        else -> FrcWizard2026ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        2027 -> FrcWizard2027ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
+        else -> FrcWizard2027ExampleTemplateDefinition.values() as Array<FrcWizardTemplateDefinition>
     }
 }
 
@@ -1791,6 +1795,313 @@ enum class FrcWizard2026ExampleTemplateDefinition(
 
     ;
 
+
+    override val description: String
+        @Language("HTML") get() = "<html>$_description</html>"
+
+    override val displayNameAndDescription: String
+        @Language("HTML") get() = "<html><strong>$displayName</strong> : ${_description}${createDeprecationNotice(this)}</html>"
+
+    override fun toString(): String = "${displayName}${if (this.isDeprecated) " (Deprecated)" else ""}"
+
+    override fun templateResourcesDirName(): String =
+        _templateResourcesDirName ?: if (name.length >= 2 && Character.isUpperCase(name[0]) && Character.isUpperCase(name[1])) name else name.decapitalize2()
+
+    override fun isProjectBootstrapTemplate(): Boolean = false
+}
+
+enum class FrcWizard2027ProjectTemplateDefinition(
+    override val displayName: String,
+    @field:Language("HTML") @param:Language("HTML") private val _description: String,
+    override val isDeprecated: Boolean = false,
+    override val deprecationAlternative: String? = null,
+    override val commandVersion: Int = 2,
+    override val robotType: RobotType = RobotType.SystemCore,
+    override val isExample: Boolean = false,
+    override val templateRequiresJUnit: Boolean = false,
+    override val includeAutoGenReadMe: Boolean = false,
+    override val availableTemplateLanguages: List<TemplateLanguageOption> = templateLanguageOptionListJavaAndKotlin,
+    private val _templateResourcesDirName: String? = null,
+                                                 ) : FrcWizardTemplateDefinition
+{
+    CommandV2(
+        "Command v2 Robot",
+        """A robot project using the Command Based (v2) framework, with explanatory comments and example code. Command Based robots allow complex functionality to be developed from simpler functionality/components. See the <a href="https://docs.wpilib.org/en/latest/docs/software/commandbased/index.html">Command-Based Programming</a> section of the WPILib Docs for more information."""
+    ),
+    CommandV2Skeleton(
+        "Command v2 Robot Skeleton (Advanced)",
+        """A skeleton robot project using the Command Based (v2) framework, without explanatory comments and example code. See the <a href="https://docs.wpilib.org/en/latest/docs/software/commandbased/index.html">Command-Based Programming</a> section of the WPILib Docs for more information."""
+    ),
+    CommandV3(
+        "Command v3 Robot",
+        """A robot project using the new Commands v3 framework, with explanatory comments and example code. Commands v3 builds commands as coroutines on mechanisms, and runs them from autonomous and teleop op modes.""",
+        commandVersion = 3
+    ),
+    CommandV3Skeleton(
+        "Command v3 Robot Skeleton (Advanced)",
+        """A skeleton robot project using the new Commands v3 framework, without explanatory comments and example code.""",
+        commandVersion = 3
+    ),
+    OpMode(
+        "OpMode Robot",
+        """A robot project in the op mode style, where each autonomous and teleop routine is its own op mode class, with explanatory comments and example code."""
+    ),
+    Timed(
+        "Timed Robot",
+        """Timed style, with explanatory comments and example code."""
+    ),
+    TimedSkeleton(
+        "Timed Skeleton (Advanced)",
+        """Skeleton (stub) code for TimedRobot, without explanatory comments and example code."""
+    ),
+    TimeSlice(
+        "Timeslice Robot",
+        """Timeslice style"""
+    ),
+    TimeSliceSkeleton(
+        "Timeslice Skeleton (Advanced)",
+        """Skeleton (stub) code for TimesliceRobot"""
+    ),
+    RobotBaseSkeleton(
+        "RobotBase Skeleton (Advanced)",
+        """Skeleton (stub) code for RobotBase - Not recommended for competition use"""
+    ),
+    RomiCommand(
+        "Romi - Command Robot",
+        """Romi - Command style See the <a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Getting Started with Romi</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.Romi
+    ),
+    RomiTimed(
+        "Romi - Timed Robot",
+        """Romi - Timed style See the <a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Getting Started with Romi</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.Romi
+    ),
+    XrpCommand(
+        "XRP - Command Robot",
+        """XRP - Command style XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform. See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.XRP
+    ),
+    XrpTimed(
+        "XRP - Timed Robot",
+        """XRP - Timed style XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform. See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.XRP
+    ),
+    Educational(
+        "Educational Robot",
+        """Educational Robot - Not for competition use""",
+        includeAutoGenReadMe = true
+    ),
+    RomiEducational(
+        "Romi - Educational Robot",
+        """Romi - Educational Robot See the <a href="https://docs.wpilib.org/en/stable/docs/romi-robot/index.html">Getting Started with Romi</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.Romi,
+        includeAutoGenReadMe = true
+    ),
+    XrpEducational(
+        "XRP - Educational Robot",
+        """XRP - Educational Robot XRP = <em>Experiential Robotics Platform</em>, a teaching/learning platform. See the <a href="https://docs.wpilib.org/en/stable/docs/xrp-robot/index.html">Getting Started with XRP</a> section of the WPILib Docs for more information.""",
+        robotType = RobotType.XRP,
+        includeAutoGenReadMe = true
+    ),
+    ;
+
+    override val description: String
+        @Language("HTML") get() = "<html>$_description</html>"
+
+    override val displayNameAndDescription: String
+        @Language("HTML") get() = "<html><strong>$displayName</strong> : ${_description}${createDeprecationNotice(this)}</html>"
+
+    override fun toString(): String = "${displayName}${if (this.isDeprecated) " (Deprecated)" else ""}"
+
+    override fun templateResourcesDirName(): String =
+        _templateResourcesDirName ?: if (name.length >= 2 && Character.isUpperCase(name[0]) && Character.isUpperCase(name[1])) name else name.decapitalize2()
+
+    override fun isProjectBootstrapTemplate(): Boolean = true
+}
+
+enum class FrcWizard2027ExampleTemplateDefinition(
+    override val displayName: String,
+    @field:Language("HTML") @param:Language("HTML") private val _description: String,
+    override val isDeprecated: Boolean = false,
+    override val deprecationAlternative: String? = null,
+    override val commandVersion: Int = 2,
+    override val robotType: RobotType = RobotType.SystemCore,
+    override val isExample: Boolean = true,
+    override val templateRequiresJUnit: Boolean = false,
+    override val includeAutoGenReadMe: Boolean = true,
+    override val availableTemplateLanguages: List<TemplateLanguageOption> = templateLanguageOptionListJavaAndKotlin,
+    private val _templateResourcesDirName: String? = null,
+                                                 ) : FrcWizardTemplateDefinition
+{
+    GettingStarted(
+        "Getting Started",
+        """A differential-drive robot with split-stick Xbox arcade drive with a simple time-based autonomous."""
+    ),
+    RebuiltCommandV3(
+        "Commands v3 - REBUILT Robot",
+        """A robot with a drivetrain, intake, and shooter subsystems controlled by the commands v3 framework""",
+        commandVersion = 3
+    ),
+    Encoder(
+        "Encoder",
+        """View values from a quadrature encoder."""
+    ),
+    ExpansionHubSample(
+        "Expansion Hub Sample",
+        """Sample the functionality of the Expansion Hub motors."""
+    ),
+    ElevatorTrapezoidProfile(
+        "Elevator with trapezoid profiled PID",
+        """Reach elevator position setpoints with trapezoid profiles and smart motor controller PID."""
+    ),
+    ElevatorExponentialProfile(
+        "Elevator with exponential profile",
+        """Reach elevator position setpoints with exponential profiles and smart motor controller PID."""
+    ),
+    ElevatorProfiledPid(
+        "Elevator with profiled PID controller",
+        """Reach elevator position setpoints with an encoder and profiled PID control."""
+    ),
+    Gyro(
+        "Gyro",
+        """Drive a differential drive straight with a gyro sensor."""
+    ),
+    MecanumDrive(
+        "Mecanum Drive",
+        """Drive a mecanum drivetrain using field-oriented controls with a joystick."""
+    ),
+    Mechanism2d(
+        "Mechanism2d",
+        """Display mechanism states on a dashboard with Mechanism2d."""
+    ),
+    HatchbotTraditional(
+        "'Traditional' Hatchbot",
+        """A fully-functional Commandv2 hatchbot for the 2019 game, written in the 'traditional' style, i.e. commands are given their own classes."""
+    ),
+    HatchbotInlined(
+        "'Inlined' Hatchbot",
+        """A fully-functional Commandv2 hatchbot for the 2019 game, written in the 'inlined' style, i.e. many commands are defined inline with lambdas."""
+    ),
+    HatchbotCommandV3(
+        "Hatchbot Commandsv3",
+        """A fully-functional Commandv3 hatchbot for the 2019 game, written in the 'inlined' style, i.e. many commands are defined inline with lambdas.""",
+        commandVersion = 3
+    ),
+    RapidReactCommandBot(
+        "Rapid React Command Bot",
+        """A fully-functional Commandv2 fender bot for the 2022 game, written in the 'inlined' style, i.e. many commands are defined inline with lambdas."""
+    ),
+    SwerveBot(
+        "SwerveBot",
+        """Use kinematics and odometry with a swerve drive."""
+    ),
+    MecanumBot(
+        "MecanumBot",
+        """Use kinematics and odometry with a mecanum drive."""
+    ),
+    DifferentialDriveBot(
+        "DifferentialDriveBot",
+        """Use kinematics and odometry with a differential drive."""
+    ),
+    ArcadeDriveGamepad(
+        "Arcade Drive Xbox Controller",
+        """Control a differential drive with split-stick arcade drive in teleop."""
+    ),
+    TankDriveGamepad(
+        "Tank Drive Gamepad",
+        """Control a differential drive with Xbox tank drive in teleop."""
+    ),
+    DutyCycleEncoder(
+        "Duty Cycle Encoder",
+        """View values from a duty-cycle encoder."""
+    ),
+    DsGamepadChooser(
+        "DS Gamepad Chooser",
+        """Use a gamepad-controlled Driver Station display selector to configure separate autonomous opmodes."""
+    ),
+    DriverStationDisplayLines(
+        "Driver Station Display Lines",
+        """Display lines on the Driver Station display and update them every robot loop."""
+    ),
+    DriverStationDisplayAnsi(
+        "Driver Station Display ANSI",
+        """Stream ANSI text to the Driver Station display and update a value in place once per second."""
+    ),
+    DriveDistanceOffboard(
+        "DriveDistanceOffboard",
+        """Drive a differential drivetrain a set distance using TrapezoidProfile and smart motor controller PID."""
+    ),
+    StateSpaceFlywheel(
+        "StateSpaceFlywheel",
+        """Control a flywheel using a state-space model (based on values from CAD), with a Kalman Filter and LQR."""
+    ),
+    StateSpaceFlywheelSysId(
+        "StateSpaceFlywheelSysId",
+        """Control a flywheel using a state-space model (based on values from SysId), with a Kalman Filter and LQR."""
+    ),
+    StateSpaceElevator(
+        "StateSpaceElevator",
+        """Control an elevator using a state-space model (based on values from CAD), with a Kalman Filter and LQR."""
+    ),
+    StateSpaceArm(
+        "StateSpaceArm",
+        """Control an arm using a state-space model (based on values from CAD), with a Kalman Filter and LQR."""
+    ),
+    SimpleDifferentialDriveSimulation(
+        "SimpleDifferentialDriveSimulation",
+        """Simulate a differential drivetrain and follow trajectories with LTVUnicycleController (non-Commandv2)."""
+    ),
+    ElevatorSimulation(
+        "ElevatorSimulation",
+        """Simulate an elevator.""",
+        templateRequiresJUnit = true
+    ),
+    ElevatorExponentialSimulation(
+        "Elevator Exponential Profile Simulation",
+        """Simulate an elevator."""
+    ),
+    ArmSimulation(
+        "ArmSimulation",
+        """Simulate a single-jointed arm.""",
+        templateRequiresJUnit = true
+    ),
+    UnitTesting(
+        "UnitTesting",
+        """Test a robot project with basic unit tests in simulation.""",
+        templateRequiresJUnit = true
+    ),
+    DifferentialDrivePoseEstimator(
+        "DifferentialDrivePoseEstimator",
+        """Combine differential-drive odometry with vision data using DifferentialDrivePoseEstimator."""
+    ),
+    MecanumDrivePoseEstimator(
+        "MecanumDrivePoseEstimator",
+        """Combine mecanum-drive odometry with vision data using MecanumDrivePoseEstimator."""
+    ),
+    SwerveDrivePoseEstimator(
+        "SwerveDrivePoseEstimator",
+        """Combine swerve-drive odometry with vision data using SwerveDrivePoseEstimator."""
+    ),
+    RomiReference(
+        "RomiReference",
+        """An example Commandv2 robot program that can be used with the Romi reference robot design.""",
+        robotType = RobotType.Romi
+    ),
+    XrpReference(
+        "XRP Reference",
+        """An example Commandv2 robot program that can be used with the XRP reference robot design.""",
+        robotType = RobotType.XRP
+    ),
+    XrpTimedExample(
+        "XRP Timed",
+        """An very basic timed robot program that can be used with the XRP reference robot design.""",
+        robotType = RobotType.XRP
+    ),
+    SysIdRoutine(
+        "SysIdRoutine",
+        """A sample Commandv2 robot demonstrating use of the SysIdRoutine command factory"""
+    ),
+    ;
 
     override val description: String
         @Language("HTML") get() = "<html>$_description</html>"

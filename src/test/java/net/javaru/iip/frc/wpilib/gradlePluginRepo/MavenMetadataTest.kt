@@ -169,4 +169,21 @@ internal class MavenMetadataTest
         val mavenMetadata = MavenMetadata("edu.wpi.first.GradleRIO", "edu.wpi.first.GradleRIO.gradle.plugin", "2020.1.1-beta-3a", "2020.1.1-beta-3a", "2020.1.1-beta-3a", expectedVersionStrings, "20191123193733")
 
     }
+
+    @Test
+    fun mergesTheGradleRioMetadataFromBeforeAndAfterTheMoveToOrgWpilib()
+    {
+        val legacy = MavenMetadata("edu.wpi.first.GradleRIO", "edu.wpi.first.GradleRIO.gradle.plugin", "2026.2.1", "2026.2.1", "2026.2.1",
+                                   listOf("2026.1.1", "2026.2.1"), "20260215000000")
+        val current = MavenMetadata("org.wpilib.GradleRIO", "org.wpilib.GradleRIO.gradle.plugin", "2027.0.0-alpha-7", "2027.0.0-alpha-7", "2027.0.0-alpha-7",
+                                    listOf("2027.0.0-alpha-6", "2027.0.0-alpha-7"), "20260930000000")
+        val merged = WpiLibMavenMetadata(mergeMavenMetadata(legacy, current))
+        assertAll(
+            { assertEquals(listOf("2026.1.1", "2026.2.1", "2027.0.0-alpha-6", "2027.0.0-alpha-7"), merged.mavenMetadata.versions) },
+            { assertEquals("2027.0.0-alpha-7", merged.mavenMetadata.latest) },
+            { assertEquals("2027.0.0-alpha-7", merged.mavenMetadata.release) },
+            { assertEquals("20260930000000", merged.mavenMetadata.lastUpdated) },
+            { assertEquals("2027.0.0-alpha-7", merged.wpiLibVersionsDescending.first().versionString) },
+                 )
+    }
 }

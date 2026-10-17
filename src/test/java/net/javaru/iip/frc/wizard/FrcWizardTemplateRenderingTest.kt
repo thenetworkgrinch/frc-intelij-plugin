@@ -25,6 +25,7 @@ import net.javaru.iip.frc.freemarker.freemarkerConfiguration
 import net.javaru.iip.frc.freemarker.freemarkerConfigurationForKotlinTemplates
 import net.javaru.iip.frc.wizard.FrcModuleBuilder.TemplatePaths
 import net.javaru.iip.frc.wizard.FrcProjectWizardData.GradleDslOption
+import net.javaru.iip.frc.wpilib.determineProjectYearStringForVersion
 import net.javaru.iip.frc.wpilib.version.WpiLibVersion
 import net.javaru.iip.frc.wpilib.version.WpiLibVersionImpl
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -60,12 +61,13 @@ internal class FrcWizardTemplateRenderingTest
     private val wpilibVersionsByYear = mapOf(
         2025 to "2025.3.2",
         2026 to "2026.2.1",
+        2027 to "2027.0.0-alpha-7",
                                             )
     private val fmStd = freemarkerConfiguration(this, "/")
     private val fmKotlin = freemarkerConfigurationForKotlinTemplates(this, "/")
 
     @ParameterizedTest
-    @ValueSource(ints = [2025, 2026])
+    @ValueSource(ints = [2025, 2026, 2027])
     fun `render templates`(year: Int)
     {
         val wpilibVersion = WpiLibVersionImpl.parse(wpilibVersionsByYear.getValue(year))
@@ -74,8 +76,9 @@ internal class FrcWizardTemplateRenderingTest
         // Complex examples, plus the examples whose resource directory names don't follow the enum-name convention
         val examplesToRender = setOf("HatchbotInlined", "HatchbotTraditional", "RomiReference", "XrpReference", "RapidReactCommandBot",
                                      "PdpCanMonitoring", "Mechanism2D", "SimpleVision", "DifferentialDrivePoseEstimator", "I2CCommunication")
+        // From 2027 on, every example is rendered, in each of its languages
         val definitions = projectTemplateDefinitionsFor(year).toList() +
-                          exampleTemplateDefinitionsFor(year).filter { (it as Enum<*>).name in examplesToRender }
+                          exampleTemplateDefinitionsFor(year).filter { year >= 2027 || (it as Enum<*>).name in examplesToRender }
         val rendered = mutableListOf<Path>()
         try
         {
@@ -93,12 +96,15 @@ internal class FrcWizardTemplateRenderingTest
             assertTrue(rendered.size >= 30, "Expected at least 30 rendered projects but got ${rendered.size}")
             rendered.forEach { project ->
                 val vendordeps = project.resolve("vendordeps")
+                // The season is frcYear before 2027, and the WPILib project year (e.g. "2027_alpha7") as wpilibYear from 2027 on
+                val projectYear = if (year >= 2027) determineProjectYearStringForVersion(wpilibVersion) else year.toString()
+                val seasonKey = if (year >= 2027) "wpilibYear" else "frcYear"
                 Files.list(vendordeps).use { files ->
                     files.filter { it.name.endsWith(".json") }.forEach {
-                        assertTrue(it.readText().contains(""""frcYear": "$year""""), "$it does not declare frcYear $year")
+                        assertTrue(it.readText().contains(""""$seasonKey": "$projectYear""""), "$it does not declare $seasonKey $projectYear")
                     }
                 }
-                assertEquals(year.toString(), """"projectYear"\s*:\s*"(\d+)"""".toRegex().find(project.resolve(".wpilib/wpilib_preferences.json").readText())?.groupValues?.get(1))
+                assertEquals(projectYear, """"projectYear"\s*:\s*"([^"]+)"""".toRegex().find(project.resolve(".wpilib/wpilib_preferences.json").readText())?.groupValues?.get(1))
             }
             println("[FRC] Rendered ${rendered.size} $year projects to $outRoot")
         }
@@ -146,6 +152,8 @@ internal class FrcWizardTemplateRenderingTest
                 it.name.contains("frc-plugin-notes-README.txt") -> false
                 it.name.contains("WPILibOldCommands") -> definition.commandVersion == 1
                 it.name.contains("WPILibNewCommands") -> definition.commandVersion == 2
+                it.name.contains("CommandsV2")        -> definition.commandVersion == 2
+                it.name.contains("CommandsV3")        -> definition.commandVersion == 3
                 it.name.contains("XRPVendordep")      -> data.isXrpTemplate
                 it.name.contains("RomiVendordep")     -> data.isRomiTemplate
                 else                                  -> true

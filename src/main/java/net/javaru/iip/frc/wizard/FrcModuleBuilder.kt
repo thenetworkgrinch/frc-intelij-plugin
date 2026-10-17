@@ -586,6 +586,9 @@ class FrcModuleBuilder : JavaModuleBuilder(), ModuleBuilderListener
                 it.name.contains("frc-plugin-notes-README.txt") -> false
                 it.name.contains("WPILibOldCommands") -> dataModel.frcWizardTemplateDefinition.commandVersion == 1
                 it.name.contains("WPILibNewCommands") -> dataModel.frcWizardTemplateDefinition.commandVersion == 2
+                // From 2027 on, each project gets the Commands v2 or the Commands v3 vendordep (which conflict with each other)
+                it.name.contains("CommandsV2")        -> dataModel.frcWizardTemplateDefinition.commandVersion == 2
+                it.name.contains("CommandsV3")        -> dataModel.frcWizardTemplateDefinition.commandVersion == 3
                 it.name.contains("XRPVendordep")      -> dataModel.isXrpTemplate// include only if this is an XRP robot template
                 it.name.contains("RomiVendordep")     -> dataModel.isRomiTemplate // include only if this is a Romi robot template
                 // default to including/keeping the file, since this also covers configs/.wpilib/wpilib_preferences.json file, and others
@@ -1116,7 +1119,8 @@ class FrcModuleBuilder : JavaModuleBuilder(), ModuleBuilderListener
         //       We could potentially look at the version in the Gradle Te,plate
         // Also update 'frc.ui.wizard.sdkRequirement.text' message key
         dataModel.frcYear <= 2023 -> LanguageLevel.JDK_11.toJavaVersion()
-        else                      -> LanguageLevel.JDK_17.toJavaVersion()
+        dataModel.frcYear <= 2026 -> LanguageLevel.JDK_17.toJavaVersion()
+        else                      -> LanguageLevel.JDK_25.toJavaVersion()
     }
 
     companion object
