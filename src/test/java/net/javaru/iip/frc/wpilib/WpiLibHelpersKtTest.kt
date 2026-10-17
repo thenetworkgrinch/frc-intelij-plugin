@@ -90,4 +90,23 @@ internal class WpiLibHelpersKtTest
         // From 2027 on, the project year is the WPILib installer's, which settings.gradle and the vendordeps' wpilibYear use
         assertEquals(expected, determineProjectYearStringForVersion(WpiLibVersionImpl.parse(version)))
     }
+
+    @Test
+    fun `wpiLibHomeRoot is wpilib in the base path before 2027 on Linux, and on other systems`()
+    {
+        val home = Paths.get("/home/frc")
+        assertAll({ assertPathsEqual(home.resolve("wpilib"), wpiLibHomeRoot(2026, home, isLinux = true, xdgDataHome = "/data")) },
+                  { assertPathsEqual(home.resolve("wpilib"), wpiLibHomeRoot(2027, home, isLinux = false, xdgDataHome = "/data")) })
+    }
+
+    @Test
+    fun `wpiLibHomeRoot is wpilib in the XDG data directory from 2027 on Linux`()
+    {
+        val home = Paths.get("/home/frc")
+        assertAll({ assertPathsEqual(Paths.get("/data/wpilib"), wpiLibHomeRoot(2027, home, isLinux = true, xdgDataHome = "/data")) },
+                  { assertPathsEqual(home.resolve(".local/share/wpilib"), wpiLibHomeRoot(2027, home, isLinux = true, xdgDataHome = null)) },
+                  { assertPathsEqual(home.resolve(".local/share/wpilib"), wpiLibHomeRoot(2028, home, isLinux = true, xdgDataHome = " ")) },
+                  // A relative XDG_DATA_HOME is ignored
+                  { assertPathsEqual(home.resolve(".local/share/wpilib"), wpiLibHomeRoot(2027, home, isLinux = true, xdgDataHome = "data")) })
+    }
 }

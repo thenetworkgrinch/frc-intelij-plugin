@@ -31,7 +31,8 @@ import java.time.Year
 
 /**
  * Finds the JDK installed by the WPILib installer for the project's year. The WPILib install directory is named for the
- * project's `projectYear` (e.g. `C:\Users\Public\wpilib\2027_alpha7`), with the plain year (e.g. `2026`) as a fallback.
+ * project's `projectYear` (e.g. `C:\Users\Public\wpilib\2027_alpha7`, or `~/.local/share/wpilib/2027_alpha7` on Linux), with the
+ * plain year (e.g. `2026`) as a fallback.
  * **Must not be called on the EDT** as determining the project year is a slow operation.
  */
 fun Project.findWpiLibJdkHome(): Path? = wpiLibJdkHomeCandidates(getConfiguredProjectYear()).firstOrNull { it.hasJavaExecutable() }
@@ -40,7 +41,7 @@ fun Project.findWpiLibJdkHome(): Path? = wpiLibJdkHomeCandidates(getConfiguredPr
 fun wpiLibJdkHomeCandidates(projectYear: String?): List<Path>
 {
     val year = extractProjectYear(projectYear) ?: Year.now().value
-    // e.g. C:\Users\Public\wpilib (Windows) or ~/wpilib (Mac & Linux)
+    // e.g. C:\Users\Public\wpilib (Windows), ~/wpilib (Mac, and Linux before 2027) or ~/.local/share/wpilib (Linux, 2027 and later)
     val wpiLibBaseDir = getDefaultWpiLibRootPath(year).parent
     return listOfNotNull(projectYear?.trim()?.ifBlank { null }, year.toString())
         .distinct()
