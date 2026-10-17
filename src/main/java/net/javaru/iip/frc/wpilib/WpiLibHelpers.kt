@@ -128,6 +128,7 @@ fun getDefaultWpiLibRootPath(year: Int): Path
     //
     // 2019  C:\Users\Public\frc${frcYear}          Mac & Linux: ~/frc${frcYear}
     // 2020+ C:\Users\Public\wpilib\${frcYear}      Mac & Linux: ~/wpilib/${frcYear}
+    // 2027+ Linux: $XDG_DATA_HOME/wpilib/${frcYear}, or ~/.local/share/wpilib/${frcYear} when XDG_DATA_HOME is not set (as GradleRIO's WPIExtension.computeHomeRoot)
 
     val basePath = if (SystemInfo.isWindows)
     {
@@ -161,8 +162,21 @@ fun getDefaultWpiLibRootPath(year: Int): Path
 
     } else
     {
-        basePath.resolve("wpilib").resolve("$year")
+        wpiLibHomeRoot(year, basePath, SystemInfo.isLinux, System.getenv("XDG_DATA_HOME")).resolve("$year")
     }
+}
+
+/**
+ * The directory the WPILib installs of each year are in, for 2020 and later: `wpilib` in the [basePath] (the user's home,
+ * or the public folder on Windows), except on Linux from 2027, where it is `wpilib` in the XDG data directory.
+ */
+internal fun wpiLibHomeRoot(year: Int, basePath: Path, isLinux: Boolean, xdgDataHome: String?): Path
+{
+    if (!isLinux || year < 2027) return basePath.resolve("wpilib")
+    // A relative XDG_DATA_HOME is invalid, and is ignored, per the XDG Base Directory Specification. A path starting with / is
+    // taken as absolute, as GradleRIO does, so this also works (e.g. in tests) on Windows
+    val xdgDataDir = xdgDataHome?.ifBlank { null }?.let { runCatching { Paths.get(it) }.getOrNull() }?.takeIf { it.isAbsolute || xdgDataHome.startsWith("/") }
+    return (xdgDataDir ?: basePath.resolve(".local").resolve("share")).resolve("wpilib")
 }
 
 /**
