@@ -227,7 +227,7 @@ fun createGradleRunConfiguration(project: Project,
             gradleTaskSettings.externalProjectPath = project.basePath
             gradleTaskSettings.taskNames = gradleTasks
             if (arguments != null) gradleTaskSettings.scriptParameters = arguments
-            if (vmOptions != null) gradleTaskSettings.vmOptions = arguments
+            if (vmOptions != null) gradleTaskSettings.vmOptions = vmOptions
 
             if (setAsShared)
             {

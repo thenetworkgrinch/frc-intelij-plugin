@@ -76,4 +76,13 @@ internal class WpiLibSimulationTest
         assertEquals("simulateJava", simulateJavaGradleTask(debug = false))
         assertEquals("simulateJavaDebug", simulateJavaGradleTask(debug = true))
     }
+
+    @Test
+    fun `the simulation run configurations run GradleRIO's run task for 2027 and later, and simulateJava before`()
+    {
+        assertEquals("run", simulationGradleTask("2027_alpha7"))
+        assertEquals("run", simulationGradleTask("2028"))
+        assertEquals("simulateJava", simulationGradleTask("2026"))
+        assertEquals("simulateJava", simulationGradleTask("Beta2025-2"))
+    }
 }

@@ -175,17 +175,28 @@ fun simulationVmOptions(existingOptions: List<String>, libraryDir: String?): Lis
 /**
  * Creates the simulation run configurations (simulate, simulate with hardware simulation, and clean build & simulate) if they
  * do not already exist. They are only created once the project's main module exists (i.e. after the Gradle import).
+ *
+ * They are Gradle run configurations, like the plugin's other run configurations, each with its own fixed tasks and arguments:
+ * GradleRIO's `run` task (2027+) or `simulateJava` task (2026 and earlier), with `-PhwSim` only for the hardware simulation one.
+ * Earlier versions of the plugin created [WpiLibSimulationRunConfiguration]s, which are replaced.
  */
 fun ensureWpiLibSimulationRunConfigurations(project: Project)
 {
     if (project.isDisposed || project.getMainModule() == null) return
     renameLegacySimulationRunConfigurations(project)
-    createSimulationRunConfiguration(project, simulateRobotCodeRunConfigName, hwSim = false, clean = false)
-    createSimulationRunConfiguration(project, simulateRobotCodeHwSimRunConfigName, hwSim = true, clean = false)
-    createSimulationRunConfiguration(project, cleanBuildAndSimulateRobotCodeRunConfigName, hwSim = false, clean = true)
+    val simulateTask = simulationGradleTask(project.getConfiguredProjectYear())
+    createSimulationRunConfiguration(project, simulateRobotCodeRunConfigName, listOf(simulateTask), hwSim = false)
+    createSimulationRunConfiguration(project, simulateRobotCodeHwSimRunConfigName, listOf(simulateTask), hwSim = true)
+    createSimulationRunConfiguration(project, cleanBuildAndSimulateRobotCodeRunConfigName, listOf("clean", simulateTask), hwSim = false)
     repairSimulationRunConfigurationModules(project)
     removeBuildBeforeLaunchTasks(project)
 }
+
+/**
+ * The GradleRIO task that builds and runs the simulation: `run` for 2027+ (the task GradleRIO's `simulateExternalJava` names in
+ * `build/sim/java.json`), `simulateJava` for 2026 and earlier.
+ */
+fun simulationGradleTask(projectYear: String?): String = if (isSimulatedByGradleTask(projectYear)) simulateJavaGradleTask(debug = false) else "run"
 
 /**
  * Removes the IDE's 'Build' before launch task, which earlier versions of the plugin added (by default) to the simulation run
@@ -233,27 +244,26 @@ private fun renameLegacySimulationRunConfigurations(project: Project)
     }
 }
 
-private fun createSimulationRunConfiguration(project: Project, name: String, hwSim: Boolean, clean: Boolean)
+private fun createSimulationRunConfiguration(project: Project, name: String, gradleTasks: List<String>, hwSim: Boolean)
 {
     try
     {
         val runManager = RunManager.getInstance(project)
         val existing = runManager.findConfigurationByName(name)
+        var wasSelected = false
         if (existing != null)
         {
-            // An earlier version of the plugin created these as Application configurations, which do not work since IDEA
-            // delegates running them to Gradle. Those are replaced; any other configuration with the name is left alone.
-            if (existing.configuration is WpiLibSimulationRunConfiguration || existing.configuration !is ApplicationConfiguration) return
+            // Earlier versions of the plugin created these as Application configurations, which do not work since IDEA delegates
+            // running them to Gradle, and then as WPILib Simulation configurations. Both are replaced; any other configuration
+            // with the name, such as the Gradle configuration created here, is left alone.
+            if (existing.configuration !is WpiLibSimulationRunConfiguration && existing.configuration !is ApplicationConfiguration) return
+            wasSelected = runManager.selectedConfiguration == existing
             runManager.removeConfiguration(existing)
-            logger.info("[FRC] Replacing the '$name' Application run configuration with a WPILib Simulation configuration for project '${project.name}'")
+            logger.info("[FRC] Replacing the '$name' ${existing.type.displayName} run configuration with a Gradle configuration for project '${project.name}'")
         }
-        val settings = runManager.createConfiguration(name, WpiLibSimulationConfigurationType.getInstance().configurationFactories[0])
-        val configuration = settings.configuration as WpiLibSimulationRunConfiguration
-        project.getMainModule()?.let { configuration.setModule(it) }
-        configuration.hwSim = hwSim
-        configuration.clean = clean
-        runManager.addConfiguration(settings)
-        logger.info("[FRC] Created '$name' run configuration for project '${project.name}'")
+        createGradleRunConfiguration(project, name, gradleTasks, setAsSelected = wasSelected, setAsShared = false,
+                                     arguments = if (hwSim) hwSimArgument else null)
+        logger.info("[FRC] Created '$name' run configuration (Gradle: ${gradleTasks.joinToString(" ")}${if (hwSim) " $hwSimArgument" else ""}) for project '${project.name}'")
     }
     catch (e: Exception)
     {
