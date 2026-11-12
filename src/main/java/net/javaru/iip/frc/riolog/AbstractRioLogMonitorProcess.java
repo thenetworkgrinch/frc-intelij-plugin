@@ -243,31 +243,17 @@ public abstract class AbstractRioLogMonitorProcess extends Process
 
 
     @Override
-    public OutputStream getOutputStream()
-    {
-        return new OutputStream()
-        {
-            @Override
-            public void write(int b) throws IOException
-            {
-
-            }
-        };
-    }
+    public OutputStream getOutputStream() { return OutputStream.nullOutputStream(); }
 
 
+    /**
+     * There is no error output; everything is written to the {@link #getInputStream() input stream}. This must be an empty
+     * stream that is at its end. The process handler reads it on its own thread, in blocking mode by default (the
+     * 'output.reader.blocking.mode' property). A stream whose read() returned 0, rather than -1, made that thread spin
+     * forever, using a full CPU core and flooding the console with NUL characters.
+     */
     @Override
-    public InputStream getErrorStream()
-    {
-        return new InputStream()
-        {
-            @Override
-            public int read() throws IOException
-            {
-                return 0;
-            }
-        };
-    }
+    public InputStream getErrorStream() { return InputStream.nullInputStream(); }
 
 
     @Override

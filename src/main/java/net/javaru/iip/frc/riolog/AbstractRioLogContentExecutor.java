@@ -162,23 +162,50 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
 
     public void reRun()
     {
+        reRun(true);
+    }
+
+
+    /**
+     * (Re)starts monitoring.
+     *
+     * @param requestFocus whether to give the console the focus, or just show it (e.g. when started automatically on a deploy)
+     */
+    public void reRun(boolean requestFocus)
+    {
         ApplicationManager.getApplication().invokeLater(() ->
                                                         {
                                                             if (myProcessHandler != null) {
-                                                                myProcessHandler.destroyProcess();  
+                                                                myProcessHandler.destroyProcess();
                                                             }
                                                             invokeClearAll();
                                                             if (myProcessHandler != null) {
                                                                 myProcessHandler.waitFor(2000L);
                                                             }
-                                                            run(false);
+                                                            run(false, requestFocus);
                                                             // Commenting out for now as it is causing issues
                                                             //ensureContentIsPinned();
                                                         });
     }
 
 
+    /** Whether the console is monitoring the robot (i.e. it has been started, and not stopped), rather than idle. */
+    public boolean isMonitoring()
+    {
+        final AbstractRioLogMonitorProcess process = rioLogMonitorProcess;
+        return process != null && process.isEnabled() && !(process instanceof AnnouncementRioLogMonitorProcess)
+               && myProcessHandler != null && !myProcessHandler.isProcessTerminated();
+    }
+
+
     public void run(boolean isFreshActivation)
+    {
+        // A fresh activation (e.g. when the project is opened) shows the console without taking the focus
+        run(isFreshActivation, !isFreshActivation);
+    }
+
+
+    public void run(boolean isFreshActivation, boolean requestFocus)
     {
         // Implementation based on com.intellij.execution.RunContentExecutor
         // When reworking, look at com.intellij.build.BuildContentManagerImpl which is a more up to date ContentExecutor implementation  
@@ -268,7 +295,17 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
                 
                 if (myActivateToolWindow)
                 {
-                    activateRioLogConsole();
+                    // When the console is first opened (e.g. when the project is opened), or started on a deploy, it is shown without
+                    // taking the focus from the editor. The connection to the robot is started on demand: via the Start button, or
+                    // when the robot code is deployed.
+                    if (requestFocus)
+                    {
+                        activateRioLogConsole();
+                    }
+                    else
+                    {
+                        showRioLogConsole();
+                    }
                 }
                 
                 if (myAfterCompletionRunnable != null)
@@ -364,6 +401,7 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
 
         actions.add(new RioLogClearAllAction());
         actions.add(new RioLogToggleAutoClearAction());
+        actions.add(new ToggleStartOnDeployAction());
     
         actions.add(new Separator());
         if (myConsoleView instanceof OccurenceNavigator)
@@ -395,15 +433,29 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
     protected abstract Executor createExecutor();
 
 
+    /** Opens the console's tool window, selects the console, and gives it the focus. */
     public void activateRioLogConsole()
+    {
+        invokeWhenProjectIsOpen(new ActivateRioLogConsoleRunnable(true));
+    }
+
+
+    /** Opens the console's tool window and selects the console, without taking the focus (e.g. from the editor). */
+    public void showRioLogConsole()
+    {
+        invokeWhenProjectIsOpen(new ActivateRioLogConsoleRunnable(false));
+    }
+
+
+    private void invokeWhenProjectIsOpen(@NotNull Runnable runnable)
     {
         if (myProject.isInitialized() && myProject.isOpen())
         {
-            ApplicationManager.getApplication().invokeLater(new ActivateRioLogConsoleRunnable());
+            ApplicationManager.getApplication().invokeLater(runnable);
         }
-        else 
+        else
         {
-            ApplicationManager.getApplication().invokeLater(new ActivateRioLogConsoleRunnable(), o -> myProject.isInitialized() && myProject.isOpen());
+            ApplicationManager.getApplication().invokeLater(runnable, o -> myProject.isInitialized() && myProject.isOpen());
         }
     }
 
@@ -442,6 +494,10 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
 
     private class ActivateRioLogConsoleRunnable implements Runnable
     {
+        private final boolean requestFocus;
+
+        private ActivateRioLogConsoleRunnable(boolean requestFocus) { this.requestFocus = requestFocus; }
+
         @Override
         public void run()
         {
@@ -455,13 +511,20 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
                     LOG.warn("[FRC] Could get instance of FRC Tool Window");
                     return;
                 }
-                toolWindow.activate(null);
+                if (requestFocus)
+                {
+                    toolWindow.activate(null);
+                }
+                else
+                {
+                    toolWindow.show(null);
+                }
                 final ContentManager contentManager = toolWindow.getContentManager();
                 final Content content = contentManager.findContent(getTabTitle());
                 if (content != null)
                 {
-                    LOG.debug("[FRC] requesting focus for " + content.getDescription());
-                    contentManager.setSelectedContent(content, true);
+                    LOG.debug("[FRC] selecting " + content.getDescription() + " requestFocus=" + requestFocus);
+                    contentManager.setSelectedContent(content, requestFocus);
                     ensureContentIsPinned(content);
                 }
                 else
@@ -894,6 +957,38 @@ public abstract class AbstractRioLogContentExecutor implements Disposable
         }
     
     
+        @Override
+        public @NotNull ActionUpdateThread getActionUpdateThread()
+        {
+            return ActionUpdateThread.BGT;
+        }
+    }
+
+
+    private static class ToggleStartOnDeployAction extends ToggleAction implements DumbAware
+    {
+        public ToggleStartOnDeployAction()
+        {
+            super("Start on Deploy",
+                  "Toggles whether the SystemCore Console is automatically started, and shown, when the robot code is deployed.",
+                  AllIcons.Actions.Upload);
+        }
+
+
+        @Override
+        public boolean isSelected(@NotNull AnActionEvent e)
+        {
+            return FrcApplicationSettings.getInstance().getStartConsoleOnDeploy();
+        }
+
+
+        @Override
+        public void setSelected(@NotNull AnActionEvent event, boolean state)
+        {
+            FrcApplicationSettings.getInstance().setStartConsoleOnDeploy(state);
+        }
+
+
         @Override
         public @NotNull ActionUpdateThread getActionUpdateThread()
         {

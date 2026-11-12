@@ -88,16 +88,16 @@ public abstract class AbstractRioLogMonitorProjectService
             }
             else
             {
-                LOG.debug("[FRC] Case 1.3B: have console, need it, and it is the right type, listening on the correct port. Just need to activate it. Project is: "
+                // Not activated, as update() is called for many project changes, and should not repeatedly take the focus (or reopen
+                // the tool window after the user has closed it). The console is activated on demand via activate().
+                LOG.debug("[FRC] Case 1.3B: have console, need it, and it is the right type, listening on the correct port. No action needed. Project is: "
                           + myProject.getName());
-                activate();
             }
         }
         else if (needConsole && haveConsole && contentExecutor.getRioLogMonitorProcess() != null && !contentExecutor.getRioLogMonitorProcess().isEnabled())
         {
-            // Case 2 - We need it, have, but its just not enabled
-            LOG.debug("[FRC] Case 2: need a console, have it, but its not enabled. Activating it. Project is: " + myProject.getName());
-            activate();
+            // Case 2 - We need it, have, but it is not running. It is started on demand, via its Start button.
+            LOG.debug("[FRC] Case 2: need a console, have it, but it is not running. No action needed. Project is: " + myProject.getName());
         }
         else if (needConsole)
         {
@@ -165,6 +165,29 @@ public abstract class AbstractRioLogMonitorProjectService
         }
     }
 
+    /**
+     * Starts monitoring, and shows the console without taking the focus, as is done when the robot code is deployed. If the console
+     * is already monitoring (e.g. it is connected, or waiting for the robot to restart), it is just shown. Must be called on the EDT.
+     */
+    public synchronized void startMonitoringWithoutFocus()
+    {
+        if (myProject.isDisposed() || !WpiLibProjectDetectionKt.isWpiLibProject(myProject)) return;
+
+        if (contentExecutor == null || !isFrcToolWindowAvailable())
+        {
+            closeContentExecutor();
+            initContentExecutor(false, false);
+        }
+        else if (contentExecutor.isMonitoring())
+        {
+            contentExecutor.showRioLogConsole();
+        }
+        else
+        {
+            contentExecutor.reRun(false);
+        }
+    }
+
     public void stop()
     {
         if (contentExecutor != null)
@@ -192,12 +215,19 @@ public abstract class AbstractRioLogMonitorProjectService
 
     private void initContentExecutor(final boolean isFreshActivation)
     {
-        LOG.debug("[FRC] Creating AbstractRioLogContentExecutor: isFreshActivation=" + isFreshActivation);
+        // A fresh activation (e.g. when the project is opened) shows the console without taking the focus
+        initContentExecutor(isFreshActivation, !isFreshActivation);
+    }
+
+
+    private void initContentExecutor(final boolean isFreshActivation, final boolean requestFocus)
+    {
+        LOG.debug("[FRC] Creating AbstractRioLogContentExecutor: isFreshActivation=" + isFreshActivation + " requestFocus=" + requestFocus);
         try
         {
             contentExecutor = createRioLogContentExecutor();
             Disposer.register(myProject, contentExecutor);
-            contentExecutor.run(isFreshActivation);
+            contentExecutor.run(isFreshActivation, requestFocus);
         }
         catch (Exception e)
         {

@@ -38,7 +38,7 @@ public class FrcRioLogToolWindowExecutor extends Executor
 {
     private static final Logger LOG = Logger.getInstance(FrcRioLogToolWindowExecutor.class);
 
-    public static final String FRC_RIO_LOG_TOOL_WINDOW_ID = "FRC"; // We may want to change this to RioLog if/when we create an FRC tool window for other features
+    public static final String FRC_RIO_LOG_TOOL_WINDOW_ID = "SystemCore Console"; // Also the tool window's name (see getActionName())
     // The executor ID must match the id attribute of the <extensions>/<executor> element in the plugin.xml file
     public static final String EXECUTOR_ID = FrcRioLogToolWindowExecutor.class.getSimpleName();
     public static final Icon FRC_TOOL_WINDOW_ICON = FRC.FIRST_ICON_SMALL_13_ELEVATED;
@@ -64,7 +64,7 @@ public class FrcRioLogToolWindowExecutor extends Executor
 
 
     @Override
-    public String getDescription() { return "FRC riolog tool window"; }
+    public String getDescription() { return "SystemCore Console tool window"; }
 
 
     @NotNull
@@ -79,7 +79,7 @@ public class FrcRioLogToolWindowExecutor extends Executor
 
     @NotNull
     @Override
-    public String getStartActionText() { return "FRC RioLog Tool Window"; }
+    public String getStartActionText() { return "SystemCore Console"; }
 
 
     @Override
