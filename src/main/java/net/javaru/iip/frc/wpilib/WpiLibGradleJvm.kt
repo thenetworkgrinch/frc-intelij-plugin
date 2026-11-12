@@ -21,6 +21,10 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.openapi.externalSystem.model.task.ExternalSystemTaskType
+import com.intellij.openapi.externalSystem.service.internal.ExternalSystemProcessingManager
+import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
+import com.intellij.openapi.module.ModuleManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.ProjectJdkTable
@@ -30,8 +34,11 @@ import com.intellij.openapi.projectRoots.SimpleJavaSdkType
 import com.intellij.openapi.projectRoots.impl.SdkConfigurationUtil
 import com.intellij.openapi.util.io.FileUtil
 import net.javaru.iip.frc.run.findWpiLibJdkHome
+import net.javaru.iip.frc.util.isGradleProject
 import net.javaru.iip.frc.util.isJavaPluginAvailable
+import net.javaru.iip.frc.util.reimportGradleProject
 import org.jetbrains.plugins.gradle.settings.GradleSettings
+import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.nio.file.Path
 
 private object WpiLibGradleJvm
@@ -46,17 +53,40 @@ private const val gradleJvmSetToWpiLibJdkKey = "FRC.gradleJvmWpiLibJdk"
  * JDK, so a Gradle JVM the user selects afterwards is kept until the project's year (and thus its WPILib JDK) changes. Does
  * nothing if the WPILib JDK is not installed, or the Gradle project has not yet been linked (in which case it is tried again later).
  */
-fun ensureGradleJvmIsWpiLibJdk(project: Project)
+@JvmOverloads
+fun ensureGradleJvmIsWpiLibJdk(project: Project, afterwards: (() -> Unit)? = null)
 {
     if (project.isDisposed) return
     // Determining the project year, and thus the JDK, is a slow operation
     ApplicationManager.getApplication().executeOnPooledThread {
         if (project.isDisposed) return@executeOnPooledThread
-        val jdkHome = project.findWpiLibJdkHome() ?: return@executeOnPooledThread
-        val jdkHomePath = FileUtil.toSystemIndependentName(jdkHome.toString())
-        if (PropertiesComponent.getInstance(project).getValue(gradleJvmSetToWpiLibJdkKey) == jdkHomePath) return@executeOnPooledThread
-        ApplicationManager.getApplication().invokeLater({ setGradleJvm(project, jdkHome, jdkHomePath) }, ModalityState.nonModal(), project.disposed)
+        val jdkHome = project.findWpiLibJdkHome()
+        val jdkHomePath = jdkHome?.let { FileUtil.toSystemIndependentName(it.toString()) }
+        val setJvm = jdkHome != null && jdkHomePath != null && PropertiesComponent.getInstance(project).getValue(gradleJvmSetToWpiLibJdkKey) != jdkHomePath
+        if (!setJvm && afterwards == null) return@executeOnPooledThread
+        ApplicationManager.getApplication().invokeLater({
+            if (setJvm) setGradleJvm(project, jdkHome!!, jdkHomePath!!)
+            afterwards?.invoke()
+        }, ModalityState.nonModal(), project.disposed)
     }
+}
+
+/**
+ * Syncs (imports) the Gradle project of a WPILib project that is linked to Gradle, but has no modules imported from Gradle. That is,
+ * the IDE does not know the project's source folders, dependencies, or JDK, so its Java files are not recognized. The IDE does not
+ * sync such a project itself, as it treats a project with a linked Gradle project as already imported. This happens when the project
+ * includes its '.idea' directory (e.g. one that was generated, or committed to version control), or when the IDE's cache of the
+ * imported project was lost (e.g. the IDE was not shut down properly). The sync also sets the project's JDK. Must be called on the EDT.
+ */
+fun syncWpiLibProjectIfNotImported(project: Project)
+{
+    if (project.isDisposed || !project.isGradleProject()) return
+    val isImported = ModuleManager.getInstance(project).modules.any { ExternalSystemApiUtil.isExternalSystemAwareModule(GradleConstants.SYSTEM_ID, it) }
+    if (isImported) return
+    // e.g. the IDE's own sync of a newly opened project
+    if (ExternalSystemProcessingManager.getInstance().hasTaskOfTypeInProgress(ExternalSystemTaskType.RESOLVE_PROJECT, project)) return
+    logger.info("[FRC] The WPILib project '${project.name}' is linked to Gradle, but has no modules imported from Gradle. Syncing the Gradle project.")
+    project.reimportGradleProject()
 }
 
 private fun setGradleJvm(project: Project, jdkHome: Path, jdkHomePath: String)

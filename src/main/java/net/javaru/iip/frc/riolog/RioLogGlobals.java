@@ -19,9 +19,9 @@ package net.javaru.iip.frc.riolog;
 public class RioLogGlobals
 {
 
-    public static final String TCP_TAB_TITLE = "RIOLog: Net Console";
-    public static final String UDP_TAB_TITLE = "RIOLog: Legacy Net Console";
-    public static final String SSH_TAB_TITLE = "RIOLog: SSH Tailing";
+    public static final String TCP_TAB_TITLE = "SystemCore Console";
+    public static final String UDP_TAB_TITLE = "Legacy Net Console (2017 and older)";
+    public static final String SSH_TAB_TITLE = "SSH Log Tailing";
 
     public static final String DEFAULT_TAIL_COMMAND = "tail -f /home/lvuser/FRC_UserProgram.log";
 

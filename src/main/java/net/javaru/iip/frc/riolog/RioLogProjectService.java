@@ -157,6 +157,9 @@ public class RioLogProjectService implements FrcProjectTeamNumberChangeListener,
 
     public void updateTcp() { runOnEdt(tcpRioLogConsoleProjectService::update); }
 
+    /** Starts the SystemCore Console (if it is not already monitoring), and shows it without taking the focus. Used on a deploy. */
+    public void startTcpWithoutFocus() { runOnEdt(tcpRioLogConsoleProjectService::startMonitoringWithoutFocus); }
+
     /**
      * Runs the (console) update on the EDT: immediately if already on the EDT, otherwise later. Updates create UI (and wait on
      * the EDT to do so), so they are confined to the EDT. Previously they were synchronized and called from both the EDT (e.g.
@@ -212,7 +215,7 @@ public class RioLogProjectService implements FrcProjectTeamNumberChangeListener,
     
     public void stopTcp()
     {
-        udpRioLogConsoleProjectService.stop();
+        tcpRioLogConsoleProjectService.stop();
     }
     
     public void stopSsh()

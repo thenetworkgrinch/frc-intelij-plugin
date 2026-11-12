@@ -52,6 +52,8 @@ data class FrcApplicationSettings(var teamNumber: Int = UN_CONFIGURED_TEAM_NUMBE
                                   var rioLogUdpPort: Int = DEFAULT_RIO_LOG_UDP_PORT,
                                   var useFrcToolWindow: Boolean = true,
                                   var clearRioLogOnRobotRestart: Boolean = false,
+                                  /** Whether to start (and show) the SystemCore Console when the robot code is deployed. */
+                                  var startConsoleOnDeploy: Boolean = true,
                                   var logNetConsoleToFile: Boolean = false,
                                   var logNetConsoleToFileAppend: Boolean = false,
                                   var logNetConsoleToFilePath: String = "/tmp/frc/riolog",

@@ -49,6 +49,7 @@ import net.javaru.iip.frc.riolog.udp.RioLogUdpSocketManagerApplicationService
 import net.javaru.iip.frc.settings.FrcProjectTeamNumberService
 import net.javaru.iip.frc.toolWindow.VendordepsToolWindowFactory
 import net.javaru.iip.frc.wpilib.ensureGradleJvmIsWpiLibJdk
+import net.javaru.iip.frc.wpilib.syncWpiLibProjectIfNotImported
 import net.javaru.iip.frc.wpilib.isWpiLibProject
 import net.javaru.iip.frc.wpilib.isWpiLibProjectLayoutPath
 import net.javaru.iip.frc.wpilib.syncFrcFacetWithWpiLibDetection
@@ -122,8 +123,13 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
 
 
 
-    /** Creates the run configurations, and sets the Gradle JVM, of a WPILib project. */
-    private fun ensureWpiLibProjectSetUp()
+    /**
+     * Creates the run configurations, and sets the Gradle JVM, of a WPILib project.
+     *
+     * @param syncIfNotImported whether to then sync the Gradle project if it has not been imported (see [syncWpiLibProjectIfNotImported]).
+     *                          Only done when the project is opened, as the project's modules do not exist while a sync is running.
+     */
+    private fun ensureWpiLibProjectSetUp(syncIfNotImported: Boolean = false)
     {
         // The run configurations (Java simulation, remote debugging, etc.) require the Java plugin, which is not available in CLion
         if (isJavaPluginAvailable)
@@ -131,7 +137,8 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
             ensureRunDebugConfigurationsCreated(project)
             ensureWpiLibSimulationRunConfigurations(project)
         }
-        ensureGradleJvmIsWpiLibJdk(project)
+        // The sync is done after the Gradle JVM is set, so it uses the WPILib JDK
+        ensureGradleJvmIsWpiLibJdk(project, if (syncIfNotImported) ({ syncWpiLibProjectIfNotImported(project) }) else null)
     }
 
     internal fun runFrcProjectStartupActivities(project: Project)
@@ -143,7 +150,7 @@ class FrcProjectLifecycleService private constructor(val project: Project) : Mod
         if (project.isOpen && !project.isDisposed && project.isWpiLibProject())
         {
             RioLogProjectService.getInstance(project).update()
-            ensureWpiLibProjectSetUp()
+            ensureWpiLibProjectSetUp(syncIfNotImported = true)
         }
 
         if (project.isOpen && project.isFrcFacetedProject() && !project.isDisposed)

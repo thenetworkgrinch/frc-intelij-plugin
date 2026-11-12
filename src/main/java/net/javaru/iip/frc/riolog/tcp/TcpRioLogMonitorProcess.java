@@ -49,6 +49,8 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
     private static final Logger LOG = Logger.getInstance(TcpRioLogMonitorProcess.class);
 
     private static final byte[] emptyFrame = new byte[] {0, 0};
+    /** How long to wait after a round of connection attempts fails before trying again. */
+    private static final long RECONNECT_DELAY_MS = 3_000;
     
     private final BlockingQueue<String> riologQueue = new ArrayBlockingQueue<>(2_048);
 
@@ -90,25 +92,20 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
         @Override
         public void run()
         {
-            boolean teamNumberIsSet = FrcProjectTeamNumberService.getInstance(project).getTeamNumber() > 0 || getSettings().isTeamNumberConfigured();
-            if (!teamNumberIsSet)
+            // The SystemCore can be reached (via USB, robot.local, or the Driver Station) without the team number. It is only needed
+            // for the team based addresses (e.g. 10.TE.AM.2), so connect either way.
+            if (FrcProjectTeamNumberService.getInstance(project).getTeamNumber() <= 0)
             {
-                consoleWriter.println();
-                consoleWriter.println("==============================================================================================================");
-                consoleWriter.println("==  YOUR TEAM NUMBER IS NOT CONFIGURED.                                                                     ==");
-                consoleWriter.println("==  To use RIOLog monitoring, please configure your Team Number in Settings > Languages & Frameworks > FRC  ==");
-                consoleWriter.println("==============================================================================================================");
-                isRunning = false;
-                enabled = false;
+                consoleWriter.println("Your team number is not configured, so only the USB, robot.local, and Driver Station addresses will be tried.");
+                consoleWriter.println("To also connect via the team based addresses (e.g. 10.TE.AM.2), configure it in Settings > Languages & Frameworks > FRC.");
             }
-            else
             {
                 logStartingMonitoring();
                 isRunning = true;
                 final TcpRioLogListener rioLogListener = new TcpRioLogListener();
                 listenerThread = new Thread(rioLogListener);
                 listenerThread.setDaemon(true);
-                listenerThread.setName("TcpRioLogListener");
+                listenerThread.setName("SystemCoreConsoleListener");
                 listenerThread.start();
                 
                 while (listenerThread.isAlive() && !listenerThread.isInterrupted()) 
@@ -159,7 +156,7 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
         
         @Override
         @NotNull
-        protected String getStartingMonitoringMessage() {return "Connecting to roboRIO...";}
+        protected String getStartingMonitoringMessage() {return "Connecting to the robot...";}
 
     }
 
@@ -224,6 +221,17 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
                         if (in == null)
                         {
                             LOG.trace("[FRC] Did not reconnect.");
+                            // Wait before trying again, rather than continuously starting a new round of connection attempts
+                            // (each of which resolves host names and starts a thread per address)
+                            try
+                            {
+                                TimeUnit.MILLISECONDS.sleep(RECONNECT_DELAY_MS);
+                            }
+                            catch (InterruptedException e)
+                            {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
                             continue;
                         }
                     }
@@ -241,7 +249,7 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
                     }
                     catch (IOException e)
                     {
-                        LOG.warn("[FRC] RIOLog TCP socket disconnected (or other IOException) during read: " + e.toString());
+                        LOG.warn("[FRC] SystemCore Console TCP socket disconnected (or other IOException) during read: " + e.toString());
                         lock.lock();
                         Consumer<Boolean> connCb;
                         try
@@ -409,6 +417,19 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
             }
         }
 
+        private boolean isCurrentSocket(Socket s)
+        {
+            lock.lock();
+            try
+            {
+                return socket == s;
+            }
+            finally
+            {
+                lock.unlock();
+            }
+        }
+
         private DataInputStream connect()
         {
             LOG.debug("[FRC] Connecting to TCP RioLog Monitoring");
@@ -427,6 +448,7 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
             {
                 return null;
             }
+            final Socket connectedSocket = mySocket;
             setSocket(mySocket);
             DataInputStream in;
             OutputStream out;
@@ -467,17 +489,22 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
                 }
                 catch (Exception ignore) {}
                     
-                riologQueue.put(">>>Connected to roboRIO" + connectionInfo + "<<<");
+                riologQueue.put(">>>Connected to the robot" + connectionInfo + "<<<");
                 riologQueue.put("");
             }
             catch (InterruptedException ignore) {}
-            LOG.info("[FRC] RIOLog TCP socket connected");
+            LOG.info("[FRC] SystemCore Console TCP socket connected");
 
-            // kick off keep alive thread
-            if (sender == null)
+            // Kick off a keep alive thread for this connection. A previous connection's thread exits once its socket is closed (it
+            // previously was only created for the first connection, so keep alives were not sent, and a lost connection was not
+            // detected, after a reconnect).
+            if (sender != null)
+            {
+                sender.interrupt();
+            }
             {
                 sender = new Thread(() -> {
-                    while (!Thread.interrupted() && !cleanup.get())
+                    while (!Thread.currentThread().isInterrupted() && !cleanup.get())
                     {
                         try
                         {
@@ -492,12 +519,16 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
                         }
                         catch (IOException e)
                         {
-                            LOG.debug("[FRC] failed to send keep alive, reconnecting");
-                            reconnect();
+                            // Only reconnect if this is still the current connection (and not one that has already been replaced)
+                            if (isCurrentSocket(connectedSocket))
+                            {
+                                LOG.debug("[FRC] failed to send keep alive, reconnecting");
+                                reconnect();
+                            }
                             break;
                         }
                     }
-                }, "RioConsoleSender");
+                }, "SystemCoreConsoleSender");
                 sender.setDaemon(true);
                 sender.start();
             }
@@ -509,6 +540,10 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
         {
             cleanup.set(true);
             TcpRioSocketConnectorProjectService.getInstance(project).stopConnectionAttempts();
+            if (sender != null)
+            {
+                sender.interrupt();
+            }
             closeSocket();
             Thread.currentThread().interrupt();
         }
@@ -522,7 +557,7 @@ public class TcpRioLogMonitorProcess extends AbstractRioLogMonitorProcess
 
         public void closeSocket()
         {
-            LOG.info("[FRC] Closing RIOLog TCP socket");
+            LOG.info("[FRC] Closing SystemCore Console TCP socket");
             lock.lock();
             Socket s;
             try

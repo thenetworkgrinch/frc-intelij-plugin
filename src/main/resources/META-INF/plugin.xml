@@ -38,7 +38,7 @@
             <!-- The first sentence gets used as a summary at the JetBrains Plugins Repository. -->
             <em><a href='https://www.firstinspires.org'>FIRST</a> Robotics Competition</em>
             (<a href='https://www.firstinspires.org/robotics/frc'>FRC</a>) development support for
-            IntelliJ IDEA, including new project wizards, new class templates, robust RioLog console,
+            IntelliJ IDEA, including new project wizards, new class templates, robust SystemCore (and roboRIO) console,
             and more. Enjoy using your favorite IDE when coding your team's robot in Java
             and/or Kotlin.
         </p>
@@ -309,6 +309,13 @@
     <applicationListeners>
         <listener class="net.javaru.iip.frc.services.FrcAppLifecycleListener" topic="com.intellij.ide.AppLifecycleListener" />
     </applicationListeners>
+
+    <projectListeners>
+        <!-- Starts the SystemCore Console when the robot code is deployed -->
+        <listener class="net.javaru.iip.frc.riolog.StartConsoleOnDeployListener" topic="com.intellij.execution.ExecutionListener" />
+        <!-- Opens the Profiler tool window when a profiled simulation ends -->
+        <listener class="net.javaru.iip.frc.run.OpenProfilerAfterSimulationListener" topic="com.intellij.execution.ExecutionListener" />
+    </projectListeners>
 
     <!-- Extensions which the plugin adds to extension points defined by the IDEA core or by other plugins.
          The "defaultExtensionNs " attribute must be set to the ID of the plugin defining the extension point, or to
