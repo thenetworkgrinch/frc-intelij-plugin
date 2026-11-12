@@ -36,10 +36,10 @@ jobs:
       # 'is.ci.build' allows building without the (secret) build token replacements, e.g. the Sentry DSNs.
       # 'buildSearchableOptions' is skipped as it launches the IDE and is only needed for release builds.
       - name: Build plugin
-        run: ./gradlew -Pis.ci.build=true -x buildSearchableOptions buildPlugin
+        run: ./gradlew -Pis.ci.build=true -PbuildSearchableOptions=false buildPlugin
 
       - name: Run tests
-        run: ./gradlew -Pis.ci.build=true -x buildSearchableOptions check
+        run: ./gradlew -Pis.ci.build=true -PbuildSearchableOptions=false check
 
       - name: Upload plugin
         uses: actions/upload-artifact@v7

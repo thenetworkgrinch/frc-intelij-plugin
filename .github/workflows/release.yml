@@ -115,7 +115,7 @@ jobs:
           fi
 
       - name: Build plugin
-        run: ./gradlew -Pis.ci.build=true "-PfrcPluginEapDesignator=${{ steps.version.outputs.suffix }}" -x buildSearchableOptions buildPlugin check
+        run: ./gradlew -Pis.ci.build=true "-PfrcPluginEapDesignator=${{ steps.version.outputs.suffix }}" -PbuildSearchableOptions=false buildPlugin check
 
       - name: Prepare release assets
         id: assets

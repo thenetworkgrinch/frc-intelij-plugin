@@ -90,6 +90,11 @@ intellijPlatform {
     
     
     sandboxContainer.set(File(sandboxPath))
+
+    // CI builds skip the (slow) searchable options index with -PbuildSearchableOptions=false. Excluding the task with
+    // '-x buildSearchableOptions' no longer works (as of IntelliJ Platform Gradle Plugin 2.20), since prepareJarSearchableOptions
+    // then fails on a clean checkout because the buildSearchableOptions output directory does not exist.
+    buildSearchableOptions = projectProperty("buildSearchableOptions", "true").toBoolean()
     
     pluginVerification {
         // https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html#intellijPlatform-pluginVerification
