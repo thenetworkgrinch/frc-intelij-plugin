@@ -144,10 +144,9 @@ fun Project.markGradleProjectAsNeedingReimport(scheduleForAutoReimport: Boolean 
                     // Note, in the externalProjectsWatcher.markDirty implementation, it also iterates over
                     //       contributors. However, the gradle plugin does not implement the ExternalSystemProjectsWatcherImpl.Contributor
                     //       extension point (only maven does) so it would be an empty list
+                    // As of 2026.3, markDirty schedules the change processing (which shows the "Load Gradle Changes" notification) itself
                     if (scheduleForAutoReimport)
                         projectTracker.scheduleProjectRefresh()
-                    else
-                        projectTracker.scheduleChangeProcessing() // Was .scheduleProjectNotificationUpdate() pre 2021.3
                 }
             }, project.disposed)
     }

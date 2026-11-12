@@ -46,13 +46,13 @@ plugins {
     java
     // List of Kotlin versions bundled with the IDE by version:
     // https://plugins.jetbrains.com/docs/intellij/using-kotlin.html#stdlib-miscellaneous
-    kotlin("jvm") version "2.4.0"
+    kotlin("jvm") version "2.4.21"
     // IntelliJ Platform Gradle Plugin: gradle plugin-for writing IntelliJ plugins
     //     Docs: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
     //           Last version of docs on GitHub before migration: https://github.com/JetBrains/gradle-intellij-plugin/blob/e819958cdc4e593738cd96e230edd5ca66481b3b/README.md
     //     Info: https://lp.jetbrains.com/gradle-intellij-plugin/
     //     Src:  https://github.com/JetBrains/gradle-intellij-plugin
-    id("org.jetbrains.intellij.platform") version "2.19.0"
+    id("org.jetbrains.intellij.platform") version "2.20.1"
 
 
     // Extends the Gradle's "idea" DSL with specific settings: code style, facets, run configurations etc.
@@ -118,7 +118,7 @@ intellijPlatformTesting {
                 version.set(ideaVersionPlain)
             }
             plugins {
-                plugin("com.intellij.gradle", projectProperty("clionGradlePluginVersion", "262.10968.211"))
+                plugin("com.intellij.gradle", projectProperty("clionGradlePluginVersion", "263.7307.200"))
             }
             // Opens a (trusted) project on startup. ex: -PrunClionProject=C:/robots/MyCppRobot
             val runClionProject = projectProperty("runClionProject", "")
