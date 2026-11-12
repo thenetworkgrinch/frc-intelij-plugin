@@ -52,7 +52,9 @@ plugins {
     //           Last version of docs on GitHub before migration: https://github.com/JetBrains/gradle-intellij-plugin/blob/e819958cdc4e593738cd96e230edd5ca66481b3b/README.md
     //     Info: https://lp.jetbrains.com/gradle-intellij-plugin/
     //     Src:  https://github.com/JetBrains/gradle-intellij-plugin
-    id("org.jetbrains.intellij.platform") version "2.20.1"
+    //     NOTE: 2.20.x instruments GUI Designer forms more than once, which adds duplicate '$$$getFont$$$' methods (for forms that
+    //           set a font), so the class fails to load, e.g. the FRC settings page. Check FrcApplicationSettingsForm before upgrading.
+    id("org.jetbrains.intellij.platform") version "2.19.0"
 
 
     // Extends the Gradle's "idea" DSL with specific settings: code style, facets, run configurations etc.
