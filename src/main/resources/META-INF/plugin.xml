@@ -313,6 +313,8 @@
     <projectListeners>
         <!-- Starts the SystemCore Console when the robot code is deployed -->
         <listener class="net.javaru.iip.frc.riolog.StartConsoleOnDeployListener" topic="com.intellij.execution.ExecutionListener" />
+        <!-- Opens the Profiler tool window when a profiled simulation ends -->
+        <listener class="net.javaru.iip.frc.run.OpenProfilerAfterSimulationListener" topic="com.intellij.execution.ExecutionListener" />
     </projectListeners>
 
     <!-- Extensions which the plugin adds to extension points defined by the IDEA core or by other plugins.
